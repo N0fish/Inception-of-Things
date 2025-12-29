@@ -1,0 +1,58 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+LOGIN = "urosby"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/focal64"
+  config.vm.box_check_update = false
+  config.vm.box_download_insecure = true
+  
+  # ============================================
+  # SERVER NODE
+  # ============================================
+  config.vm.define "#{LOGIN}S" do |server|
+    server.vm.hostname = "#{LOGIN}S"
+    server.vm.network "private_network", ip: "192.168.56.110"
+    
+    server.vm.provider "virtualbox" do |vb|
+      vb.name = "#{LOGIN}S"
+      vb.memory = "2048"
+      vb.cpus = 2
+    end
+    
+    # ПРАВИЛЬНЫЙ путь - относительно директории p1
+    server.vm.provision "file", 
+      source: "scripts/server.sh",
+      destination: "/tmp/server.sh"
+    
+    server.vm.provision "shell", inline: <<-SHELL
+      chmod +x /tmp/server.sh
+      /tmp/server.sh
+    SHELL
+  end
+  
+  # ============================================
+  # WORKER NODE
+  # ============================================
+  config.vm.define "#{LOGIN}SW" do |worker|
+    worker.vm.hostname = "#{LOGIN}SW"
+    worker.vm.network "private_network", ip: "192.168.56.111"
+    
+    worker.vm.provider "virtualbox" do |vb|
+      vb.name = "#{LOGIN}SW"
+      vb.memory = "2048"
+      vb.cpus = 2
+    end
+    
+    # ПРАВИЛЬНЫЙ путь
+    worker.vm.provision "file",
+      source: "scripts/worker.sh",
+      destination: "/tmp/worker.sh"
+    
+    worker.vm.provision "shell", inline: <<-SHELL
+      chmod +x /tmp/worker.sh
+      /tmp/worker.sh
+    SHELL
+  end
+end
