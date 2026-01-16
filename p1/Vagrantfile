@@ -1,58 +1,50 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
-
 LOGIN = "urosby"
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/focal64"
-  config.vm.box_check_update = false
-  config.vm.box_download_insecure = true
-  
-  # ============================================
-  # SERVER NODE
-  # ============================================
+  config.vm.box = "generic/ubuntu2204"
+
+  #########################
+  # K3s Server VM
+  #########################
   config.vm.define "#{LOGIN}S" do |server|
     server.vm.hostname = "#{LOGIN}S"
-    server.vm.network "private_network", ip: "192.168.56.110"
-    
-    server.vm.provider "virtualbox" do |vb|
-      vb.name = "#{LOGIN}S"
-      vb.memory = "1024"
-      vb.cpus = 1
+
+    # Private network
+    server.vm.network "private_network",
+      ip: "192.168.56.110",
+      libvirt__network_name: "vagrant-libvirt",
+      libvirt__network_address: "192.168.56.0"
+
+    # VM resources
+    server.vm.provider "libvirt" do |lv|
+      lv.memory = 1024
+      lv.cpus = 1
     end
-    
-    # ПРАВИЛЬНЫЙ путь - относительно директории p1
-    server.vm.provision "file", 
-      source: "scripts/server.sh",
-      destination: "/tmp/server.sh"
-    
-    server.vm.provision "shell", inline: <<-SHELL
-      chmod +x /tmp/server.sh
-      /tmp/server.sh
-    SHELL
+
+    # Provision K3s server
+    server.vm.provision "shell", path: "scripts/server.sh"
   end
-  
-  # ============================================
-  # WORKER NODE
-  # ============================================
+
+  #########################
+  # K3s Worker VM
+  #########################
   config.vm.define "#{LOGIN}SW" do |worker|
     worker.vm.hostname = "#{LOGIN}SW"
-    worker.vm.network "private_network", ip: "192.168.56.111"
-    
-    worker.vm.provider "virtualbox" do |vb|
-      vb.name = "#{LOGIN}SW"
-      vb.memory = "1024"
-      vb.cpus = 1
+
+    # Private network
+    worker.vm.network "private_network",
+      ip: "192.168.56.111",
+      libvirt__network_name: "vagrant-libvirt",
+      libvirt__network_address: "192.168.56.0"
+
+    # VM resources
+    worker.vm.provider "libvirt" do |lv|
+      lv.memory = 1024
+      lv.cpus = 1
     end
-    
-    # ПРАВИЛЬНЫЙ путь
-    worker.vm.provision "file",
-      source: "scripts/worker.sh",
-      destination: "/tmp/worker.sh"
-    
-    worker.vm.provision "shell", inline: <<-SHELL
-      chmod +x /tmp/worker.sh
-      /tmp/worker.sh
-    SHELL
+
+    # Provision K3s agent
+    # Worker script already waits for /vagrant/confs/node-token
+    worker.vm.provision "shell", path: "scripts/worker.sh"
   end
 end
