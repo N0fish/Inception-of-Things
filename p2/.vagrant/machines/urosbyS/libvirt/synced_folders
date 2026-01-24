@@ -1,0 +1,1 @@
+{"9p":{"/vagrant":{"disabled":false,"guestpath":"/vagrant","hostpath":"/home/urosby/Documents/IOT/p2","type":"9p","accessmode":"squash","__vagrantfile":true,"target":"/vagrant","mount":true,"readonly":null,"mount_tag":"91ad940a52c17998f19efd3763400ca"}}}

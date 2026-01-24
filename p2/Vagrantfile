@@ -1,0 +1,21 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+LOGIN = "urosby"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/ubuntu2204"
+  config.vm.synced_folder ".", "/vagrant", type: "9p", disabled: false, accessmode: "squash"
+
+  config.vm.define "#{LOGIN}S" do |server|
+    server.vm.hostname = "#{LOGIN}S"
+    server.vm.network "private_network", ip: "192.168.56.110"
+
+    server.vm.provider "libvirt" do |lv|
+      lv.memory = 1024
+      lv.cpus = 1
+    end
+
+    server.vm.provision "shell", path: "scripts/setup.sh"
+  end
+end
