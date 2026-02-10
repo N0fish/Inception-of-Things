@@ -1,70 +1,46 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+# frozen_string_literal: true
+require "yaml"
 
-LOGIN = "urosby"
+CFG = YAML.load_file(File.join(__dir__, "confs", "config.yaml"))
+
+LOGIN    = CFG.fetch("login")
+BOX      = CFG.fetch("box")
+PROVIDER = CFG.fetch("provider")
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "generic/ubuntu2204"
-  
-  # Configure SSH for passwordless access
+  config.vm.box = BOX
   config.ssh.insert_key = true
-  
-  # Use rsync for shared folders (works reliably with libvirt)
-  # Rsync copies files from host to guest at provision time
-  config.vm.synced_folder ".", "/vagrant", type: "rsync",
-    rsync__args: ["--verbose", "--archive", "--delete", "-z"],
-    rsync__exclude: [".git/", ".vagrant/", "node_modules/"]
 
-  #########################
-  # K3s Server VM
-  #########################
-  config.vm.define "#{LOGIN}S" do |server|
-    server.vm.hostname = "#{LOGIN}S"
-    server.vm.network "private_network", ip: "192.168.56.110"
-    
-    server.vm.provider "libvirt" do |lv|
-      lv.memory = 1024
-      lv.cpus = 1
+  sf = CFG.fetch("synced_folder")
+  config.vm.synced_folder ".", "/vagrant",
+    type: sf.fetch("type"),
+    "9p__accessmode" => sf.fetch("accessmode"),
+    "9p__msize"      => sf.fetch("msize")
+
+  CFG.fetch("vms").each do |vm|
+    script = vm.fetch("script")
+    script_path = File.join(__dir__, script)
+    raise "Script not found: #{script_path}" unless File.exist?(script_path)
+
+    config.vm.define "#{LOGIN}#{vm.fetch("name")}" do |m|
+      m.vm.hostname = "#{LOGIN}#{vm.fetch("hostname")}"
+      m.vm.network "private_network", ip: vm.fetch("ip")
+
+      m.vm.provider PROVIDER do |lv|
+        lv.driver = "qemu"      # keep if kvm was giving you trouble; remove later to use KVM
+        lv.machine_type = "q35"
+        lv.cpus   = CFG.dig("resources", "cpus") || 1
+        lv.memory = CFG.dig("resources", "memory") || 1024
+      end
+
+      m.vm.provision "shell", inline: <<~SHELL
+        set -e
+        apt-get update -qq
+        apt-get install -y curl net-tools
+      SHELL
+
+      m.vm.provision "shell", path: script, privileged: true
     end
-
-    # Install rsync in guest and set up SSH
-    server.vm.provision "shell", inline: <<-SHELL
-      # Install rsync for Vagrant's rsync synced folder
-      apt-get update -qq
-      apt-get install -y rsync
-      
-      # Set up SSH for passwordless access
-      mkdir -p /home/vagrant/.ssh
-      if [ ! -f /home/vagrant/.ssh/id_rsa ]; then
-        ssh-keygen -t rsa -N "" -f /home/vagrant/.ssh/id_rsa
-      fi
-      cat /home/vagrant/.ssh/id_rsa.pub >> /home/vagrant/.ssh/authorized_keys
-      chmod 600 /home/vagrant/.ssh/authorized_keys
-      chown -R vagrant:vagrant /home/vagrant/.ssh
-    SHELL
-
-    server.vm.provision "shell", path: "scripts/server.sh", privileged: true
-  end
-
-  #########################
-  # K3s Worker VM
-  #########################
-  config.vm.define "#{LOGIN}SW" do |worker|
-    worker.vm.hostname = "#{LOGIN}SW"
-    worker.vm.network "private_network", ip: "192.168.56.111"
-    
-    worker.vm.provider "libvirt" do |lv|
-      lv.memory = 1024
-      lv.cpus = 1
-    end
-
-    # Install rsync in guest
-    worker.vm.provision "shell", inline: <<-SHELL
-      # Install rsync for Vagrant's rsync synced folder
-      apt-get update -qq
-      apt-get install -y rsync
-    SHELL
-
-    worker.vm.provision "shell", path: "scripts/worker.sh", privileged: true
   end
 end
+

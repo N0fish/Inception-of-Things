@@ -1,0 +1,23 @@
+login: urosby
+box: generic/ubuntu2204
+provider: libvirt
+
+resources:
+  cpus: 1
+  memory: 1024
+
+synced_folder:
+  type: 9p
+  accessmode: mapped
+  msize: 262144
+
+vms:
+  - name: S
+    hostname: S
+    ip: 192.168.56.110
+    script: scripts/server.sh
+  - name: SW
+    hostname: SW
+    ip: 192.168.56.111
+    script: scripts/worker.sh
+
