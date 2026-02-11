@@ -65,19 +65,6 @@ acl: ## Fix libvirt 9p permission issues (ACLs for qemu user on this project dir
 	\
 	printf "$(GREEN)[+] ACLs applied. Now run: make clean && make up$(NC)\n"
 
-acl-hardcoded: ## Run the exact hardcoded ACL commands for /home/urosby/Documents/IOT/p1
-	@printf "$(GREEN)[+] Showing qemu processes (if any)$(NC)\n"
-	@ps -eo user,comm | grep -E 'qemu-system|qemu-kvm' | head || true
-	@printf "$(GREEN)[+] Applying hardcoded ACL rules for libvirt-qemu$(NC)\n"
-	sudo setfacl -m u:libvirt-qemu:--x /home/urosby
-	sudo setfacl -m u:libvirt-qemu:--x /home/urosby/Documents
-	sudo setfacl -m u:libvirt-qemu:--x /home/urosby/Documents/IOT
-	sudo setfacl -m u:libvirt-qemu:rwx /home/urosby/Documents/IOT/p1
-	sudo setfacl -d -m u:libvirt-qemu:rwx /home/urosby/Documents/IOT/p1
-	sudo setfacl -R -m u:libvirt-qemu:rwx /home/urosby/Documents/IOT/p1/confs
-	sudo setfacl -R -d -m u:libvirt-qemu:rwx /home/urosby/Documents/IOT/p1/confs
-	@printf "$(GREEN)[+] Done. Now run: make clean && make up$(NC)\n"
-
 fix-permissions: acl ## Alias for 'acl'
 
 use-rsync: ## Switch to rsync synced folder (recommended for troubleshooting)
