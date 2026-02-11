@@ -1,3 +1,4 @@
 *.DS_Store
 .vscode/
-.vagrant/
+.vagrant/*
+p2/test

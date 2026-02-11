@@ -1,21 +1,28 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
-
-LOGIN = "urosby"
+# frozen_string_literal: true
 
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/ubuntu2204"
-  config.vm.synced_folder ".", "/vagrant", type: "9p", disabled: false, accessmode: "squash"
+  config.ssh.insert_key = true
 
-  config.vm.define "#{LOGIN}S" do |server|
-    server.vm.hostname = "#{LOGIN}S"
-    server.vm.network "private_network", ip: "192.168.56.110"
+  # keep your synced folder settings as you had them
+  config.vm.synced_folder ".", "/vagrant",
+    type: "9p",
+    accessmode: "mapped",
+    msize: 262144,
+    owner: "1000",
+    group: "1000"
 
-    server.vm.provider "libvirt" do |lv|
-      lv.memory = 1024
-      lv.cpus = 1
+  config.vm.define "urosbyS" do |m|
+    m.vm.hostname = "urosbyS"
+    m.vm.network "private_network", ip: "192.168.56.110"
+
+    m.vm.provider :libvirt do |lv|
+      lv.driver = "qemu"
+      lv.machine_type = "q35"
+      lv.cpus = 2
+      lv.memory = 2048
     end
 
-    server.vm.provision "shell", path: "scripts/setup.sh"
+    m.vm.provision "shell", path: "scripts/setup.sh", privileged: true
   end
 end

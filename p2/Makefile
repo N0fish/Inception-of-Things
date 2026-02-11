@@ -3,7 +3,9 @@
 SHELL := /bin/bash
 PROJECT_DIR := $(shell pwd)
 HOSTS_LINE := 192.168.56.110 app1.com app2.com app3.com
-HOSTS_MARKER := # IOT_P2_APPS
+HOSTS_IP := 192.168.56.110
+HOSTS_NAMES := app1.com app2.com app3.com
+HOSTS_MARKER := IOT_P2_APPS
 
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
@@ -44,18 +46,16 @@ acl:
 	sudo setfacl -R -d -m u:$$QEMU_USER:rwx "$(PROJECT_DIR)/confs"; \
 	printf "$(GREEN)[acl] Done$(NC)\n"
 
+
 update-hosts:
-	@printf "$(GREEN)[hosts] Updating /etc/hosts...$(NC)\n"
-	@grep -q "$(HOSTS_MARKER)" /etc/hosts 2>/dev/null && \
-		sudo sed -i "/$(HOSTS_MARKER)/d" /etc/hosts || true
-	@echo "$(HOSTS_LINE) $(HOSTS_MARKER)" | sudo tee -a /etc/hosts >/dev/null
-	@printf "$(GREEN)[hosts] Done$(NC)\n"
+	@printf "[hosts] Updating /etc/hosts...\n"
+	@sudo sh -c 'grep -v "[[:space:]]# $(HOSTS_MARKER)$$" /etc/hosts > /tmp/hosts.iot && mv /tmp/hosts.iot /etc/hosts'
+	@echo "$(HOSTS_IP) $(HOSTS_NAMES) # $(HOSTS_MARKER)" | sudo tee -a /etc/hosts >/dev/null
+	@printf "[hosts] Done\n"
 
 up: preflight update-hosts
 	@printf "$(GREEN)[up] vagrant up...$(NC)\n"
 	@vagrant up
-	@printf "$(GREEN)[up] vagrant provision...$(NC)\n"
-	@vagrant provision
 	@printf "$(GREEN)[up] Done$(NC)\n"
 
 status:
