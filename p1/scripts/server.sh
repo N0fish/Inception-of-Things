@@ -22,21 +22,23 @@ until kubectl get nodes >/dev/null 2>&1; do
   sleep 1
 done
 
-echo "[server] Writing token and kubeconfig into ${CONFS_DIR}..."
-# DO NOT chmod/chown on /vagrant with 9p (can fail). Just create and write.
-mkdir -p "${CONFS_DIR}" || true
+echo "[server] Preparing token + kubeconfig (read as root, write to /vagrant as vagrant)..."
 
-cat /var/lib/rancher/k3s/server/node-token > "${CONFS_DIR}/node-token"
+TOKEN_TMP="/tmp/node-token"
+KCFG_TMP="/tmp/k3s.yaml"
 
-cp /etc/rancher/k3s/k3s.yaml "${CONFS_DIR}/k3s.yaml"
-sed -i "s/127.0.0.1/${SERVER_IP}/g" "${CONFS_DIR}/k3s.yaml"
+# Read root-owned files into /tmp (root can do this)
+cp /var/lib/rancher/k3s/server/node-token "${TOKEN_TMP}"
+cp /etc/rancher/k3s/k3s.yaml "${KCFG_TMP}"
+sed -i "s/127.0.0.1/${SERVER_IP}/g" "${KCFG_TMP}"
 
-echo "[server] Installing nginx ingress..."
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+# Make temp files readable (this is local FS, chmod works)
+chmod 644 "${TOKEN_TMP}" "${KCFG_TMP}"
 
-echo "[server] Starting token HTTP endpoint on :8888 (fallback)..."
-nohup sh -c "while true; do nc -l -p 8888 -q 1 < '${CONFS_DIR}/node-token'; done" \
-  >/var/log/k3s-token-http.log 2>&1 &
+# All /vagrant operations as vagrant (root may be blocked on 9p)
+sudo -u vagrant mkdir -p "${CONFS_DIR}"
+sudo -u vagrant rm -f "${CONFS_DIR}/node-token" "${CONFS_DIR}/k3s.yaml"
+sudo -u vagrant cp "${TOKEN_TMP}" "${CONFS_DIR}/node-token"
+sudo -u vagrant cp "${KCFG_TMP}" "${CONFS_DIR}/k3s.yaml"
 
 echo "[server] Done."
-

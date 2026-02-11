@@ -8,6 +8,7 @@ resources:
 
 synced_folder:
   type: 9p
+  # "mapped" is the usual working mode for writable 9p shares in vagrant-libvirt
   accessmode: mapped
   msize: 262144
 
@@ -20,4 +21,3 @@ vms:
     hostname: SW
     ip: 192.168.56.111
     script: scripts/worker.sh
-

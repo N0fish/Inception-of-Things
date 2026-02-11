@@ -1,0 +1,25 @@
+# Vagrant
+.vagrant/
+*.box
+
+# K3s generated files
+confs/node-token
+confs/k3s.yaml
+
+# Logs
+*.log
+nohup.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
