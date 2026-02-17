@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-gitlab-iot-app
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: git
+  url: http://gitlab.local:8181/root/iot-app.git
+  username: root
+  password: glpat-Yc3g6JSd-GvLvMVs0oYhiG86MQp1OjEH.01.0w09ydhlz
+  forceHttpBasicAuth: "true"
