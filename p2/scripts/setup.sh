@@ -46,6 +46,33 @@ fi
 kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=180s
 
 echo "=========================================="
+echo "Waiting for Traefik and port 80..."
+echo "=========================================="
+
+echo "Waiting for Traefik deployment rollout..."
+kubectl -n kube-system rollout status deployment/traefik --timeout=180s
+
+echo "Waiting for svclb-traefik pods..."
+for i in $(seq 1 180); do
+  if kubectl -n kube-system get pods -l app=svclb-traefik \
+      --field-selector=status.phase=Running \
+      --no-headers 2>/dev/null | grep -q .; then
+    echo "svclb-traefik is running."
+    break
+  fi
+  sleep 1
+done
+
+echo "Waiting for port 80 to accept connections on ${SERVER_IP}..."
+for i in $(seq 1 180); do
+  if curl -s -o /dev/null --connect-timeout 1 "http://${SERVER_IP}/"; then
+    echo "Port 80 is reachable."
+    break
+  fi
+  sleep 1
+done
+
+echo "=========================================="
 echo "Deploying applications..."
 echo "=========================================="
 
