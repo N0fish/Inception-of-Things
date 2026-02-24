@@ -1,0 +1,23 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wil-playground-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Internal Kubernetes DNS for the GitLab webservice — bypasses ingress,
+    # works within the cluster regardless of external domain/network config.
+    repoURL: http://gitlab-webservice-default.gitlab.svc:8181/root/iot-playground.git
+    targetRevision: main
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
