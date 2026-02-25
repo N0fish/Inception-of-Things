@@ -1,4 +1,4 @@
-.PHONY: all setup cluster argocd gitlab configure-gitlab configure-argocd app test clean destroy help port-forward argocd-password gitlab-password
+.PHONY: all setup cluster argocd gitlab configure-gitlab configure-argocd app test clean destroy help port-forward argocd-password gitlab-password stop-port-forward status
 
 CLUSTER_NAME = iot-cluster
 
@@ -18,6 +18,7 @@ help:
 	@echo "  make port-forward      - Forward ports for all services"
 	@echo "  make argocd-password   - Get ArgoCD admin password"
 	@echo "  make gitlab-password   - Get GitLab root password"
+	@echo "  make test              - Run evaluation tests"
 	@echo "  make status            - Show cluster and pod status"
 	@echo "  make destroy           - Delete cluster"
 	@echo ""
@@ -121,6 +122,64 @@ status:
 	@echo ""
 	@echo "==> Dev pods:"
 	@kubectl get pods -n dev 2>/dev/null || echo "No pods in dev"
+
+test:
+	@echo "==> Running Bonus tests..."
+	@echo ""
+	@echo "==> Test 1: K3d cluster '$(CLUSTER_NAME)' exists..."
+	@k3d cluster list | grep -q "$(CLUSTER_NAME)" || (echo "✗ ERROR: Cluster not found"; exit 1)
+	@echo "✓ Cluster exists"
+	@echo ""
+	@echo "==> Test 2: Nodes are Ready..."
+	@kubectl get nodes | grep -q "Ready" || (echo "✗ ERROR: No ready nodes"; exit 1)
+	@echo "✓ Nodes are Ready"
+	@echo ""
+	@echo "==> Test 3: Required namespaces exist (argocd, gitlab, dev)..."
+	@kubectl get namespace argocd &>/dev/null || (echo "✗ ERROR: argocd namespace not found"; exit 1)
+	@kubectl get namespace gitlab &>/dev/null || (echo "✗ ERROR: gitlab namespace not found"; exit 1)
+	@kubectl get namespace dev    &>/dev/null || (echo "✗ ERROR: dev namespace not found"; exit 1)
+	@echo "✓ Namespaces argocd, gitlab, and dev exist"
+	@echo ""
+	@echo "==> Test 4: ArgoCD server pod is Running..."
+	@kubectl get pods -n argocd 2>/dev/null | grep -q "argocd-server.*Running" || (echo "✗ ERROR: ArgoCD server not running"; exit 1)
+	@echo "✓ ArgoCD server is Running"
+	@echo ""
+	@echo "==> Test 5: GitLab pods are Running..."
+	@kubectl get pods -n gitlab 2>/dev/null | grep -q "Running" || (echo "✗ ERROR: No GitLab pods running in gitlab namespace"; exit 1)
+	@echo "✓ GitLab pods are Running"
+	@echo ""
+	@echo "==> Test 6: ArgoCD application exists (pointing to local GitLab)..."
+	@kubectl get application -n argocd &>/dev/null || (echo "✗ ERROR: No ArgoCD applications found"; exit 1)
+	@echo "✓ ArgoCD application configured"
+	@echo ""
+	@echo "==> Test 7: ArgoCD application is Synced and Healthy..."
+	@APP=$$(kubectl get application -n argocd -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); \
+	SYNC=$$(kubectl get application "$$APP" -n argocd \
+		-o jsonpath='{.status.sync.status}' 2>/dev/null); \
+	HEALTH=$$(kubectl get application "$$APP" -n argocd \
+		-o jsonpath='{.status.health.status}' 2>/dev/null); \
+	echo "    App: $$APP  |  Sync: $$SYNC  |  Health: $$HEALTH"; \
+	[ "$$SYNC" = "Synced" ]    || (echo "✗ ERROR: Application not Synced (got: $$SYNC)"; exit 1); \
+	[ "$$HEALTH" = "Healthy" ] || (echo "✗ ERROR: Application not Healthy (got: $$HEALTH)"; exit 1)
+	@echo "✓ Application is Synced and Healthy"
+	@echo ""
+	@echo "==> Test 8: wil-playground pod is Running in dev namespace..."
+	@kubectl get pods -n dev 2>/dev/null | grep -q "wil-playground.*Running" || (echo "✗ ERROR: Application pod not running in dev"; exit 1)
+	@echo "✓ Application pod is Running"
+	@echo ""
+	@echo "==> Test 9: Application responds via internal Service..."
+	@kubectl run curl-test --image=curlimages/curl -i --rm --restart=Never -- \
+		curl -s http://wil-playground-service.dev.svc.cluster.local:8888 | grep -q "status" || (echo "✗ ERROR: Application not responding"; exit 1)
+	@echo "✓ Application responds on port 8888"
+	@echo ""
+	@echo "==> Test 10: Services accessible via port-forward..."
+	@curl -s http://localhost:9090 2>/dev/null | grep -q "" || (echo "⚠ WARNING: ArgoCD port-forward not active (run 'make port-forward')"; exit 0)
+	@curl -s http://localhost:8181 2>/dev/null | grep -q "" || (echo "⚠ WARNING: GitLab port-forward not active (run 'make port-forward')"; exit 0)
+	@echo "✓ Services accessible via port-forward"
+	@echo ""
+	@echo "========================================="
+	@echo "All Bonus tests passed!"
+	@echo "========================================="
 
 destroy:
 	@echo "==> Destroying cluster..."

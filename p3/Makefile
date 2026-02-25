@@ -83,44 +83,54 @@ status:
 	@kubectl get svc -n dev 2>/dev/null || echo "No services in dev namespace yet"
 
 test:
-	@echo "==> Running tests..."
+	@echo "==> Running Part 3 tests..."
 	@echo ""
-	@echo "==> Test 1: Checking K3d cluster..."
+	@echo "==> Test 1: K3d cluster '$(CLUSTER_NAME)' exists..."
 	@k3d cluster list | grep -q "$(CLUSTER_NAME)" || (echo "✗ ERROR: Cluster not found"; exit 1)
 	@echo "✓ Cluster exists"
 	@echo ""
-	@echo "==> Test 2: Checking nodes..."
+	@echo "==> Test 2: Nodes are Ready..."
 	@kubectl get nodes | grep -q "Ready" || (echo "✗ ERROR: No ready nodes"; exit 1)
 	@echo "✓ Nodes are Ready"
 	@echo ""
-	@echo "==> Test 3: Checking namespaces..."
+	@echo "==> Test 3: Required namespaces exist (argocd, dev)..."
 	@kubectl get namespace argocd &>/dev/null || (echo "✗ ERROR: argocd namespace not found"; exit 1)
-	@kubectl get namespace dev &>/dev/null || (echo "✗ ERROR: dev namespace not found"; exit 1)
-	@echo "✓ Required namespaces exist (argocd, dev)"
+	@kubectl get namespace dev    &>/dev/null || (echo "✗ ERROR: dev namespace not found"; exit 1)
+	@echo "✓ Namespaces argocd and dev exist"
 	@echo ""
-	@echo "==> Test 4: Checking ArgoCD installation..."
+	@echo "==> Test 4: ArgoCD server pod is Running..."
 	@kubectl get pods -n argocd 2>/dev/null | grep -q "argocd-server.*Running" || (echo "✗ ERROR: ArgoCD server not running"; exit 1)
-	@echo "✓ ArgoCD is running"
+	@echo "✓ ArgoCD server is Running"
 	@echo ""
-	@echo "==> Test 5: Checking application..."
+	@echo "==> Test 5: ArgoCD application 'wil-playground-app' exists..."
 	@kubectl get application wil-playground-app -n argocd &>/dev/null || (echo "✗ ERROR: Application not found"; exit 1)
 	@echo "✓ Application exists"
 	@echo ""
-	@echo "==> Test 6: Checking pods in dev namespace..."
-	@kubectl get pods -n dev 2>/dev/null | grep -q "wil-playground.*Running" || (echo "✗ ERROR: Application pod not running"; exit 1)
-	@echo "✓ Application pod is running"
+	@echo "==> Test 6: ArgoCD application is Synced and Healthy..."
+	@SYNC=$$(kubectl get application wil-playground-app -n argocd \
+		-o jsonpath='{.status.sync.status}' 2>/dev/null); \
+	HEALTH=$$(kubectl get application wil-playground-app -n argocd \
+		-o jsonpath='{.status.health.status}' 2>/dev/null); \
+	echo "    Sync: $$SYNC  |  Health: $$HEALTH"; \
+	[ "$$SYNC" = "Synced" ]  || (echo "✗ ERROR: Application is not Synced (got: $$SYNC)"; exit 1); \
+	[ "$$HEALTH" = "Healthy" ] || (echo "✗ ERROR: Application is not Healthy (got: $$HEALTH)"; exit 1)
+	@echo "✓ Application is Synced and Healthy"
 	@echo ""
-	@echo "==> Test 7: Testing application via Service..."
+	@echo "==> Test 7: wil-playground pod is Running in dev namespace..."
+	@kubectl get pods -n dev 2>/dev/null | grep -q "wil-playground.*Running" || (echo "✗ ERROR: Application pod not running in dev"; exit 1)
+	@echo "✓ Application pod is Running"
+	@echo ""
+	@echo "==> Test 8: Application responds via internal Service..."
 	@kubectl run curl-test --image=curlimages/curl -i --rm --restart=Never -- \
 		curl -s http://wil-playground-service.dev.svc.cluster.local:8888 | grep -q "status" || (echo "✗ ERROR: Application not responding"; exit 1)
-	@echo "✓ Application is responding"
+	@echo "✓ Application responds on port 8888"
 	@echo ""
-	@echo "==> Test 8: Testing application via port-forward..."
-	@curl -s http://localhost:9091 2>/dev/null | grep -q "status" || (echo "⚠️ WARNING: Port-forward not running (run 'make port-forward')"; exit 0)
+	@echo "==> Test 9: Application accessible via port-forward (localhost:9091)..."
+	@curl -s http://localhost:9091 2>/dev/null | grep -q "status" || (echo "⚠ WARNING: Port-forward not active (run 'make port-forward')"; exit 0)
 	@echo "✓ Application accessible via port-forward"
 	@echo ""
 	@echo "========================================="
-	@echo "All tests passed!"
+	@echo "All Part 3 tests passed!"
 	@echo "========================================="
 
 port-forward:

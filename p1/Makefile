@@ -113,7 +113,7 @@ check: ## Verify the cluster is working correctly
 	@printf "\n$(YELLOW)Worker VM:$(NC)\n"
 	@vagrant ssh $(WORKER_NAME) -c "hostname && ip a show eth1 | grep 'inet '" || true
 
-test:
+test: ## Run evaluation tests (checklist: VMs, IPs, K3s, cluster)
 	@printf "[+] Running Part 1 Tests \n\n"
 	@chmod +x ./TESTING.sh
 	@./TESTING.sh
