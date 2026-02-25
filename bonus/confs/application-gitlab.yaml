@@ -7,8 +7,6 @@ metadata:
 spec:
   project: default
   source:
-    # Internal Kubernetes DNS for the GitLab webservice — bypasses ingress,
-    # works within the cluster regardless of external domain/network config.
     repoURL: http://gitlab-webservice-default.gitlab.svc:8181/root/iot-playground.git
     targetRevision: main
     path: .

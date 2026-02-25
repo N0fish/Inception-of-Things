@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Host machine setup script for Ubuntu 22.04 LTS
-# Installs all required software for the IoT project
-
 set -e
 
 echo "======================================"
@@ -11,7 +8,6 @@ echo "Ubuntu 22.04 LTS"
 echo "======================================"
 echo ""
 
-# Check if running on Ubuntu
 if [ ! -f /etc/lsb-release ]; then
     echo "ERROR: This script is for Ubuntu systems"
     exit 1
@@ -26,18 +22,15 @@ fi
 echo "Detected: $DISTRIB_DESCRIPTION"
 echo ""
 
-# Update package list
 echo "==> Updating package list..."
 sudo apt-get update
 
-# Install libvirt and QEMU/KVM
 echo "==> Installing libvirt and QEMU/KVM..."
 if ! command -v virsh &> /dev/null; then
     sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst virt-manager
     sudo systemctl enable libvirtd
     sudo systemctl start libvirtd
 
-    # Add current user to libvirt groups
     sudo usermod -aG libvirt $USER
     sudo usermod -aG kvm $USER
     echo "libvirt installed. You need to log out and log back in for group permissions."
@@ -46,7 +39,6 @@ else
     echo "libvirt already installed"
 fi
 
-# Install Vagrant
 echo "==> Installing Vagrant..."
 if ! command -v vagrant &> /dev/null; then
     wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -57,7 +49,6 @@ else
     echo "Vagrant already installed"
 fi
 
-# Install vagrant-libvirt plugin
 echo "==> Installing vagrant-libvirt plugin..."
 if ! vagrant plugin list | grep -q vagrant-libvirt; then
     sudo apt-get install -y ruby-libvirt libvirt-dev
@@ -66,7 +57,6 @@ else
     echo "vagrant-libvirt plugin already installed"
 fi
 
-# Install Make
 echo "==> Installing Make..."
 if ! command -v make &> /dev/null; then
     sudo apt-get install -y build-essential
@@ -74,7 +64,6 @@ else
     echo "Make already installed"
 fi
 
-# Install Docker for Part 3
 echo "==> Installing Docker..."
 if ! command -v docker &> /dev/null; then
     sudo apt-get install -y ca-certificates curl gnupg
@@ -85,7 +74,6 @@ if ! command -v docker &> /dev/null; then
     sudo apt-get update
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-    # Add current user to docker group
     sudo usermod -aG docker $USER
     echo "Docker installed. You need to log out and log back in for group permissions."
     NEED_RELOGIN=1
@@ -93,7 +81,6 @@ else
     echo "Docker already installed"
 fi
 
-# Install kubectl
 echo "==> Installing kubectl..."
 if ! command -v kubectl &> /dev/null; then
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -103,7 +90,6 @@ else
     echo "kubectl already installed"
 fi
 
-# Install K3d
 echo "==> Installing K3d..."
 if ! command -v k3d &> /dev/null; then
     curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
@@ -111,7 +97,6 @@ else
     echo "K3d already installed"
 fi
 
-# Install curl (if not present)
 echo "==> Installing curl..."
 if ! command -v curl &> /dev/null; then
     sudo apt-get install -y curl

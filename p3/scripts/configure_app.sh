@@ -4,16 +4,13 @@ set -e
 
 echo "==> Configuring ArgoCD application..."
 
-# Create dev namespace
 kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
 
-# Apply the ArgoCD application
 kubectl apply -f confs/application.yaml
 
 echo "==> Waiting for application to sync..."
 sleep 10
 
-# Wait for pods
 kubectl wait --for=condition=Ready pods -l app=wil-playground -n dev --timeout=120s 2>/dev/null || echo "Waiting for pods to be ready..."
 
 echo ""

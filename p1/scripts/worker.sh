@@ -13,7 +13,6 @@ apt-get install -y curl net-tools netcat-openbsd
 
 echo "[worker] Reading token from ${TOKEN_FILE} as user vagrant..."
 
-# Root may be blocked on 9p (/vagrant) with libvirt; vagrant user can access it.
 TOKEN=""
 for i in $(seq 1 600); do
   if sudo -u vagrant test -s "${TOKEN_FILE}"; then

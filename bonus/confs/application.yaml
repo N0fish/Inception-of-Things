@@ -7,9 +7,6 @@ metadata:
 spec:
   project: default
   source:
-    # IMPORTANT: Replace this URL with your own GitHub repository!
-    # The repository should contain the deployment.yaml file from confs/app/
-    # Example: https://github.com/YOUR_USERNAME/iot-argocd-config
     repoURL: https://github.com/eddard-contessa/econtess-IoT.git
     targetRevision: HEAD
     path: .

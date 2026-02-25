@@ -4,13 +4,9 @@ set -e
 
 PROJECT_NAME="iot-playground"
 
-# The initial root password is stored in a secret created by the Helm chart.
 GITLAB_PASS=$(kubectl get secret gitlab-gitlab-initial-root-password \
   -n gitlab -o jsonpath="{.data.password}" | base64 -d)
 
-# Create a personal access token via the toolbox pod (gitlab-rails runner).
-# This is the only reliable method — GitLab API requires an existing token
-# to create a new one, and /api/v4/session was removed in GitLab 10.0.
 echo "==> Creating access token via gitlab-rails runner..."
 TOOLBOX=$(kubectl get pod -n gitlab -l app=toolbox \
   -o jsonpath='{.items[0].metadata.name}')
@@ -27,12 +23,9 @@ if [ -z "$GITLAB_TOKEN" ]; then
   exit 1
 fi
 
-# Persist for configure_argocd.sh — Make runs each target in a separate
-# subprocess so env vars cannot be passed between targets.
 echo "$GITLAB_TOKEN" > /tmp/gitlab-token
 echo "==> Token created"
 
-# Port-forward the webservice for API access
 echo "==> Port-forwarding GitLab webservice..."
 kubectl port-forward svc/gitlab-webservice-default -n gitlab 8181:8181 \
   >/dev/null 2>&1 &
@@ -47,7 +40,6 @@ for i in $(seq 1 12); do
   sleep 5
 done
 
-# Create the project as public so ArgoCD can reach it without credentials
 echo "==> Creating project '$PROJECT_NAME'..."
 PROJECT_ID=$(curl -sf \
   -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
@@ -62,7 +54,6 @@ if [ -z "$PROJECT_ID" ]; then
 fi
 echo "==> Project created (ID: $PROJECT_ID)"
 
-# Push deployment.yaml as the initial commit on main branch
 echo "==> Pushing deployment.yaml to repository..."
 CONTENT=$(base64 -w0 < confs/app/deployment.yaml)
 curl -sf \

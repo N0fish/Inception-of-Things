@@ -1,30 +1,22 @@
 #!/usr/bin/env bash
-#
-# Testing Script for Inception-of-Things Part 1
-# Based on the evaluation checklist
-#
 
 set -euo pipefail
 
-# Always run from the directory where this script lives
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
 LOGIN="urosby"
 SERVER_NAME="${LOGIN}S"
 WORKER_NAME="${LOGIN}SW"
 SERVER_IP="192.168.56.110"
 WORKER_IP="192.168.56.111"
 
-# Test counters
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
@@ -71,12 +63,8 @@ run_test() {
     fi
 }
 
-# Main Testing
 print_header "INCEPTION-OF-THINGS PART 1 - EVALUATION TESTS"
 
-# ==========================================
-# PRELIMINARY CHECKS
-# ==========================================
 print_header "1. PRELIMINARY CHECKS"
 
 print_test "Check if Vagrantfile exists in p1 folder"
@@ -95,9 +83,6 @@ else
     exit 1
 fi
 
-# ==========================================
-# CONFIGURATION VERIFICATION
-# ==========================================
 print_header "2. CONFIGURATION VERIFICATION"
 
 print_info "Checking configuration in confs/config.yaml (Vagrantfile is dynamic)..."
@@ -132,9 +117,6 @@ else
 fi
 
 
-# ==========================================
-# SERVER VM TESTS
-# ==========================================
 print_header "3. SERVER VM (${SERVER_NAME}) TESTS"
 
 print_test "SSH connection to server"
@@ -181,9 +163,6 @@ else
     print_fail "K3s server is not running"
 fi
 
-# ==========================================
-# WORKER VM TESTS
-# ==========================================
 print_header "4. WORKER VM (${WORKER_NAME}) TESTS"
 
 print_test "SSH connection to worker"
@@ -223,9 +202,6 @@ else
     print_fail "K3s agent is not running"
 fi
 
-# ==========================================
-# CLUSTER TESTS
-# ==========================================
 print_header "5. KUBERNETES CLUSTER TESTS"
 
 print_info "Getting cluster nodes..."
@@ -253,9 +229,6 @@ else
     print_fail "Worker node is not Ready"
 fi
 
-# ==========================================
-# DISPLAY CLUSTER INFORMATION
-# ==========================================
 print_header "6. CLUSTER INFORMATION (for evaluation)"
 
 print_info "Running: kubectl get nodes -o wide"
@@ -267,9 +240,6 @@ print_info "Running: kubectl get pods -A"
 echo ""
 vagrant ssh ${SERVER_NAME} -c "kubectl get pods -A" 2>/dev/null || true
 
-# ==========================================
-# RESULTS SUMMARY
-# ==========================================
 print_header "TEST RESULTS SUMMARY"
 
 echo -e "Total tests:  ${TOTAL_TESTS}"

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Host VM Setup Script for Inception-of-Things (Part 1)
-# This script installs all necessary tools on your host VM
-#
 
 set -euo pipefail
 
@@ -11,11 +7,10 @@ echo "IoT Part 1 - Host Setup Script"
 echo "=========================================="
 echo ""
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 print_status() {
     echo -e "${GREEN}[+]${NC} $1"
@@ -29,13 +24,11 @@ print_error() {
     echo -e "${RED}[✗]${NC} $1"
 }
 
-# Check if running as root
 if [[ $EUID -eq 0 ]]; then
    print_error "This script must NOT be run as root (it will use sudo when needed)"
    exit 1
 fi
 
-# Detect OS
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
@@ -47,11 +40,9 @@ fi
 
 print_status "Detected OS: $OS $VER"
 
-# Update package lists
 print_status "Updating package lists..."
 sudo apt-get update -qq
 
-# Install basic dependencies
 print_status "Installing basic dependencies..."
 sudo apt-get install -y \
     curl \
@@ -64,7 +55,6 @@ sudo apt-get install -y \
     lsb-release \
     software-properties-common
 
-# Install libvirt and QEMU
 print_status "Installing libvirt and QEMU..."
 sudo apt-get install -y \
     qemu-kvm \
@@ -75,17 +65,14 @@ sudo apt-get install -y \
     libguestfs-tools \
     libvirt-dev
 
-# Add user to libvirt groups
 print_status "Adding $USER to libvirt groups..."
 sudo usermod -aG libvirt $USER
 sudo usermod -aG kvm $USER
 
-# Start and enable libvirtd
 print_status "Starting libvirtd service..."
 sudo systemctl enable --now libvirtd
 sudo systemctl start libvirtd
 
-# Install Vagrant
 print_status "Installing Vagrant..."
 VAGRANT_VERSION="2.4.1"
 if ! command -v vagrant &> /dev/null; then
@@ -97,7 +84,6 @@ else
     print_warning "Vagrant already installed: $(vagrant --version)"
 fi
 
-# Install vagrant-libvirt plugin
 print_status "Installing vagrant-libvirt plugin..."
 if ! vagrant plugin list | grep -q vagrant-libvirt; then
     vagrant plugin install vagrant-libvirt
@@ -106,7 +92,6 @@ else
     print_warning "vagrant-libvirt plugin already installed"
 fi
 
-# Install kubectl
 print_status "Installing kubectl..."
 if ! command -v kubectl &> /dev/null; then
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -117,11 +102,9 @@ else
     print_warning "kubectl already installed: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"
 fi
 
-# Install make (if not present)
 print_status "Ensuring make is installed..."
 sudo apt-get install -y make
 
-# Verify installations
 echo ""
 echo "=========================================="
 echo "Verification"
@@ -152,7 +135,6 @@ else
     exit 1
 fi
 
-# Check libvirt status
 echo ""
 print_status "Checking libvirtd status..."
 sudo systemctl status libvirtd --no-pager | head -n 3

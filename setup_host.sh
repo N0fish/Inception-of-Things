@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
-#
-# Inception-of-Things — unified host setup script
-#
-# Installs ALL tools required for every part of the project:
-#   Part 1 & 2 : libvirt, QEMU, Vagrant, vagrant-libvirt plugin, kubectl
-#   Part 3      : + Docker, K3d
-#   Bonus       : + Helm
-#
-# Run as a non-root user (sudo is called internally where needed).
-#
+
 
 set -euo pipefail
 
-# ── colors ────────────────────────────────────────────────────────────────────
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -24,15 +15,12 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
 error()   { echo -e "${RED}[✗]${NC} $*"; }
 section() {
     echo ""
-    echo -e "${BLUE}════════════════════════════════════════${NC}"
     echo -e "${BLUE}  $*${NC}"
-    echo -e "${BLUE}════════════════════════════════════════${NC}"
     echo ""
 }
 
 have() { command -v "$1" &>/dev/null; }
 
-# ── preflight ─────────────────────────────────────────────────────────────────
 if [[ $EUID -eq 0 ]]; then
     error "Do not run as root — this script calls sudo internally."
     exit 1
@@ -49,9 +37,7 @@ echo ""
 
 NEED_RELOGIN=0
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "SYSTEM UPDATE & COMMON TOOLS"
-# ════════════════════════════════════════════════════════════════════════════════
 
 info "Updating package lists..."
 sudo apt-get update -qq
@@ -62,9 +48,7 @@ sudo apt-get install -y \
     ca-certificates gnupg lsb-release software-properties-common \
     acl
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "PART 1 & 2 — libvirt / QEMU / Vagrant  (VM-based parts)"
-# ════════════════════════════════════════════════════════════════════════════════
 
 info "Installing libvirt and QEMU/KVM..."
 sudo apt-get install -y \
@@ -102,9 +86,7 @@ else
     warn "vagrant-libvirt plugin already installed."
 fi
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "PART 3 — Docker / K3d  (container-based cluster)"
-# ════════════════════════════════════════════════════════════════════════════════
 
 info "Installing Docker..."
 if ! have docker; then
@@ -134,9 +116,7 @@ else
     warn "K3d already installed: $(k3d version | head -1)"
 fi
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "BONUS — Helm  (GitLab Helm chart)"
-# ════════════════════════════════════════════════════════════════════════════════
 
 info "Installing Helm..."
 if ! have helm; then
@@ -146,9 +126,7 @@ else
     warn "Helm already installed: $(helm version --short)"
 fi
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "ALL PARTS — kubectl / make"
-# ════════════════════════════════════════════════════════════════════════════════
 
 info "Installing kubectl..."
 if ! have kubectl; then
@@ -164,9 +142,7 @@ fi
 info "Installing make..."
 sudo apt-get install -y make
 
-# ════════════════════════════════════════════════════════════════════════════════
 section "VERIFICATION"
-# ════════════════════════════════════════════════════════════════════════════════
 
 check_cmd() {
     if have "$1"; then
@@ -203,8 +179,4 @@ fi
 
 info "You can now run each part:"
 echo ""
-echo "  Part 1 :  cd p1     && make up"
-echo "  Part 2 :  cd p2     && make up"
-echo "  Part 3 :  cd p3     && make all-in-one   # (after re-login if Docker was just installed)"
-echo "  Bonus  :  cd bonus  && make all-in-one   # (after re-login)"
-echo ""
+

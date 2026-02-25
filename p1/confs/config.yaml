@@ -8,7 +8,6 @@ resources:
 
 synced_folder:
   type: 9p
-  # "mapped" is the usual working mode for writable 9p shares in vagrant-libvirt
   accessmode: mapped
   msize: 262144
 

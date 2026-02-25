@@ -1,42 +1,35 @@
-# Makefile for Inception-of-Things Part 1
-# Usage: make [target]
-
 .PHONY: help setup up start server worker ssh-server ssh-worker status check destroy clean re test \
 		fix-permissions acl acl-hardcoded use-rsync use-nfs reload provision halt logs-server logs-worker
 
 SHELL := /bin/bash
 
-# Configuration
 LOGIN := urosby
 SERVER_NAME := $(LOGIN)S
 WORKER_NAME := $(LOGIN)SW
 SERVER_IP := 192.168.56.110
 WORKER_IP := 192.168.56.111
 
-# Project path + qemu user autodetect (libvirt)
 PROJECT_DIR := $(shell pwd)
 
-# Prefer a stable default for libvirt instead of relying on a currently-running qemu process
 QEMU_USER ?= $(shell id -u libvirt-qemu >/dev/null 2>&1 && echo libvirt-qemu || echo qemu)
 
-# Colors for output (used with printf)
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
-NC := \033[0m # No Color
+NC := \033[0m
 
-help: ## Show this help message
+help: 
 	@printf "$(GREEN)Inception-of-Things Part 1 - Makefile$(NC)\n\n"
 	@printf "Available targets:\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 	@printf "\n"
 
-setup: ## Install all required dependencies on the host
+setup: 
 	@printf "$(GREEN)[+] Installing dependencies...$(NC)\n"
 	@chmod +x setup-host.sh
 	@./setup-host.sh
 
-acl: ## Fix libvirt 9p permission issues (ACLs for qemu user on this project dir)
+acl: 
 	@set -e; \
 	printf "$(GREEN)[+] Using qemu user: $(QEMU_USER)$(NC)\n"; \
 	printf "$(GREEN)[+] Granting ACLs for 9p share path: $(PROJECT_DIR)$(NC)\n"; \
@@ -65,88 +58,88 @@ acl: ## Fix libvirt 9p permission issues (ACLs for qemu user on this project dir
 	\
 	printf "$(GREEN)[+] ACLs applied. Now run: make clean && make up$(NC)\n"
 
-fix-permissions: acl ## Alias for 'acl'
+fix-permissions: acl 
 
-use-rsync: ## Switch to rsync synced folder (recommended for troubleshooting)
+use-rsync: 
 	@printf "$(GREEN)[+] Switching to rsync synced folder...$(NC)\n"
 	@cp Vagrantfile Vagrantfile.backup 2>/dev/null || true
 	@cp Vagrantfile-rsync Vagrantfile
 	@printf "$(GREEN)[+] Done! Now run 'make clean && make up'$(NC)\n"
 
-use-nfs: ## Switch to NFS synced folder
+use-nfs: 
 	@printf "$(GREEN)[+] Switching to NFS synced folder...$(NC)\n"
 	@sudo apt-get install -y nfs-kernel-server
 	@cp Vagrantfile Vagrantfile.backup 2>/dev/null || true
 	@cp Vagrantfile-nfs Vagrantfile
 	@printf "$(GREEN)[+] Done! Now run 'make clean && make up'$(NC)\n"
 
-up: ## Start both VMs (server and worker)
+up: 
 	@printf "$(GREEN)[+] Starting both VMs...$(NC)\n"
 	@vagrant up $(SERVER_NAME)
 	@vagrant up $(WORKER_NAME)
 	@printf "$(GREEN)[+] Both VMs are up!$(NC)\n"
 
-start: up ## Alias for 'up'
+start: up 
 
-server: ## Start only the server VM
+server: 
 	@printf "$(GREEN)[+] Starting server VM...$(NC)\n"
 	@vagrant up $(SERVER_NAME)
 
-worker: ## Start only the worker VM (requires server to be running)
+worker: 
 	@printf "$(GREEN)[+] Starting worker VM...$(NC)\n"
 	@vagrant up $(WORKER_NAME)
 
-ssh-server: ## SSH into the server VM
+ssh-server: 
 	@vagrant ssh $(SERVER_NAME)
 
-ssh-worker: ## SSH into the worker VM
+ssh-worker: 
 	@vagrant ssh $(WORKER_NAME)
 
-status: ## Show status of all VMs
+status: 
 	@printf "$(GREEN)[+] VM Status:$(NC)\n"
 	@vagrant status
 
-check: ## Verify the cluster is working correctly
+check:
 	@printf "$(GREEN)[+] Checking cluster status...$(NC)\n\n"
 	@printf "$(YELLOW)Server VM:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "hostname && ip a show eth1 | grep 'inet ' && kubectl get nodes -o wide" || true
 	@printf "\n$(YELLOW)Worker VM:$(NC)\n"
 	@vagrant ssh $(WORKER_NAME) -c "hostname && ip a show eth1 | grep 'inet '" || true
 
-test: ## Run evaluation tests (checklist: VMs, IPs, K3s, cluster)
+test:
 	@printf "[+] Running Part 1 Tests \n\n"
 	@chmod +x ./TESTING.sh
 	@./TESTING.sh
 
-destroy: ## Destroy all VMs
+destroy:
 	@printf "$(YELLOW)[!] Destroying all VMs...$(NC)\n"
 	@vagrant destroy -f
 	@printf "$(GREEN)[+] All VMs destroyed$(NC)\n"
 
-clean: destroy ## Clean up everything (destroy VMs and clean vagrant data)
+clean: destroy 
 	@printf "$(YELLOW)[!] Cleaning up...$(NC)\n"
 	@rm -rf .vagrant
 	@rm -f confs/node-token confs/k3s.yaml
 	@printf "$(GREEN)[+] Cleanup complete$(NC)\n"
 
-re: clean up ## Rebuild everything from scratch
+re: clean up 
 
-reload: ## Reload VMs (useful after config changes)
+reload: 
 	@printf "$(GREEN)[+] Reloading VMs...$(NC)\n"
 	@vagrant reload
 
-provision: ## Re-run provisioning scripts
+provision:
 	@printf "$(GREEN)[+] Re-provisioning VMs...$(NC)\n"
 	@vagrant provision
 
-halt: ## Stop all VMs
+halt:
 	@printf "$(YELLOW)[!] Stopping all VMs...$(NC)\n"
 	@vagrant halt
 
-logs-server: ## Show server provisioning logs
+logs-server:
 	@vagrant ssh $(SERVER_NAME) -c "sudo journalctl -u k3s -n 50"
 
-logs-worker: ## Show worker provisioning logs
+logs-worker:
 	@vagrant ssh $(WORKER_NAME) -c "sudo journalctl -u k3s-agent -n 50"
 
 .DEFAULT_GOAL := help

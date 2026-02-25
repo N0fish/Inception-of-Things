@@ -13,18 +13,18 @@ GREEN  := \033[0;32m
 YELLOW := \033[1;33m
 NC     := \033[0m
 
-help: ## Show this help message
+help: 
 	@printf "$(GREEN)Inception-of-Things Part 2 - Makefile$(NC)\n\n"
 	@printf "Available targets:\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@printf "\n"
 
-preflight: ## Create required directories and fix ACLs for libvirt 9p
+preflight: 
 	@mkdir -p "$(PROJECT_DIR)/confs" "$(PROJECT_DIR)/scripts"
 	@$(MAKE) acl
 
-acl: ## Fix libvirt 9p permissions (grants qemu user access to shared folder)
+acl: 
 	@set -euo pipefail; \
 	PROJ="$(PROJECT_DIR)"; \
 	QEMU_USER="$$( \
@@ -47,7 +47,7 @@ acl: ## Fix libvirt 9p permissions (grants qemu user access to shared folder)
 	sudo setfacl -R -d -m "u:$$QEMU_USER:rwx" "$$PROJ/confs" "$$PROJ/scripts"; \
 	printf "$(GREEN)[acl] Done$(NC)\n"
 
-update-hosts: ## Add app1.com / app2.com / app3.com to /etc/hosts
+update-hosts: 
 	@echo "[hosts] Updating /etc/hosts..."
 	@sudo sh -c 'tmp="$$(mktemp)"; \
 	  grep -vE "[[:space:]]# $(HOSTS_MARKER)$$" /etc/hosts > "$$tmp"; \
@@ -56,18 +56,18 @@ update-hosts: ## Add app1.com / app2.com / app3.com to /etc/hosts
 	  rm -f "$$tmp"'
 	@echo "[hosts] Done"
 
-up: preflight update-hosts ## Start the VM (runs preflight + /etc/hosts update first)
+up: preflight update-hosts 
 	@printf "$(GREEN)[up] Starting VM...$(NC)\n"
 	@vagrant up
 	@printf "$(GREEN)[up] Done$(NC)\n"
 
-status: ## Show VM status
+status: 
 	@vagrant status
 
-ssh: ## SSH into the server VM
+ssh: 
 	@vagrant ssh
 
-check: ## Display cluster, pod, and ingress status inside the VM
+check:
 	@printf "$(GREEN)[+] Nodes:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "kubectl get nodes -o wide" 2>/dev/null || true
 	@echo ""
@@ -80,28 +80,28 @@ check: ## Display cluster, pod, and ingress status inside the VM
 	@printf "$(GREEN)[+] Services:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "kubectl get svc" 2>/dev/null || true
 
-test: ## Run evaluation tests (checklist: VM, K3s, apps, ingress, HTTP routing)
+test: 
 	@printf "$(GREEN)[+] Running Part 2 tests...$(NC)\n"
 	@chmod +x ./test.sh
 	@./test.sh
 
-halt: ## Stop the VM without destroying it
+halt: 
 	@printf "$(YELLOW)[!] Stopping VM...$(NC)\n"
 	@vagrant halt
 
-logs: ## Show K3s service logs from inside the VM
+logs: 
 	@vagrant ssh $(SERVER_NAME) -c "sudo journalctl -u k3s -n 50"
 
-destroy: ## Destroy the VM
+destroy: 
 	@printf "$(YELLOW)[!] Destroying VM...$(NC)\n"
 	@vagrant destroy -f
 	@printf "$(GREEN)[+] VM destroyed$(NC)\n"
 
-clean: destroy ## Destroy VM and remove all local Vagrant state
+clean: destroy 
 	@printf "$(YELLOW)[!] Cleaning up...$(NC)\n"
 	@rm -rf .vagrant
 	@printf "$(GREEN)[+] Cleanup complete$(NC)\n"
 
-re: clean up ## Rebuild everything from scratch
+re: clean up 
 
 .DEFAULT_GOAL := help

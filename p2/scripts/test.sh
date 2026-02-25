@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
-#
-# Testing Script for Inception-of-Things Part 2
-#
 
 set -euo pipefail
 
-# Always run from the directory where this script lives
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Config (adjust if you change these)
 LOGIN="urosby"
 SERVER_NAME="${LOGIN}S"
 SERVER_IP="192.168.56.110"
@@ -50,7 +44,6 @@ bad() {
   FAIL=$((FAIL + 1))
 }
 
-# Helper to run a command and mark pass/fail
 run() {
   local name="$1"
   shift
@@ -116,7 +109,6 @@ else
   bad "/etc/hosts missing marker '${HOSTS_MARKER}' (run: make update-hosts)"
 fi
 
-# Use getent (system resolver) to verify hostnames map to expected IP
 for h in app1.com app2.com app3.com; do
   testcase "Host resolves ${h} -> ${SERVER_IP}"
   RES="$(getent hosts "${h}" 2>/dev/null | awk '{print $1}' | head -n1 || true)"
@@ -128,7 +120,6 @@ for h in app1.com app2.com app3.com; do
 done
 
 header "6) HTTP CHECKS FROM HOST"
-# We don't assume response body strings, just HTTP 200.
 for h in app1.com app2.com app3.com; do
   testcase "HTTP 200 for Host: ${h}"
   CODE="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${h}" "http://${SERVER_IP}/" || true)"

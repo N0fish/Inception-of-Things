@@ -2,8 +2,6 @@
 
 set -e
 
-# Token was written to file by configure_gitlab.sh.
-# Make runs each target in a separate subprocess — env vars don't cross.
 GITLAB_TOKEN=$(cat /tmp/gitlab-token)
 
 if [ -z "$GITLAB_TOKEN" ]; then

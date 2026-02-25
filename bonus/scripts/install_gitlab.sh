@@ -2,7 +2,6 @@
 
 set -e
 
-# Install Helm if not present
 if ! command -v helm &>/dev/null; then
   echo "==> Installing Helm..."
   sudo snap install helm --classic
@@ -15,9 +14,6 @@ helm repo update
 echo "==> Creating gitlab namespace..."
 kubectl create namespace gitlab --dry-run=client -o yaml | kubectl apply -f -
 
-# values-minikube-minimum.yaml is maintained by GitLab alongside the chart —
-# it always disables certmanager, TLS, prometheus, and gitlab-runner,
-# sets minimal resources, and stays in sync with the latest chart version.
 echo "==> Installing GitLab via Helm (5-10 minutes)..."
 helm upgrade --install gitlab gitlab/gitlab \
   -n gitlab \
