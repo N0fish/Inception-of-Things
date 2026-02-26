@@ -19,7 +19,7 @@ curl -sfL https://get.k3s.io | sh -s - \
   --node-ip="${SERVER_IP}"
 
 echo "Waiting for K3s API to respond..."
-for i in $(seq 1 180); do
+for i in $(seq 1 120); do
   if kubectl get --raw=/readyz >/dev/null 2>&1; then
     echo "K3s API is ready."
     break
@@ -28,7 +28,7 @@ for i in $(seq 1 180); do
 done
 
 echo "Waiting for node object to appear..."
-for i in $(seq 1 180); do
+for i in $(seq 1 120); do
   if kubectl get nodes --no-headers 2>/dev/null | grep -q .; then
     echo "Node object found."
     break
@@ -37,31 +37,29 @@ for i in $(seq 1 180); do
 done
 
 echo "Waiting for node to be Ready..."
-NODE_NAME="$(kubectl get nodes --no-headers | awk 'NR==1{print $1}')"
+NODE_NAME="$(kubectl get nodes --no-headers 2>/dev/null | awk 'NR==1{print $1}')"
 if [[ -z "${NODE_NAME}" ]]; then
   echo "ERROR: Node name still empty. kubectl get nodes:"
   kubectl get nodes -o wide || true
   exit 1
 fi
-kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=180s
+kubectl wait --for=condition=Ready "node/${NODE_NAME}" --timeout=120s
 
 echo "=========================================="
-echo "Waiting for Traefik and port 80..."
+echo "Waiting for Traefik + port 80..."
 echo "=========================================="
 
-echo "Waiting for Traefik deployment rollout..."
-kubectl -n kube-system rollout status deployment/traefik --timeout=180s
-
-echo "Waiting for svclb-traefik pods..."
-for i in $(seq 1 180); do
-  if kubectl -n kube-system get pods -l app=svclb-traefik \
-      --field-selector=status.phase=Running \
-      --no-headers 2>/dev/null | grep -q .; then
-    echo "svclb-traefik is running."
+echo "Waiting for Traefik deployment to appear..."
+for i in $(seq 1 120); do
+  if kubectl -n kube-system get deploy traefik >/dev/null 2>&1; then
+    echo "Traefik deployment found."
     break
   fi
   sleep 1
 done
+
+echo "Waiting for Traefik pod to be Ready..."
+kubectl -n kube-system wait --for=condition=Ready pod -l app.kubernetes.io/name=traefik --timeout=120s || true
 
 echo "Waiting for port 80 to accept connections on ${SERVER_IP}..."
 for i in $(seq 1 180); do
@@ -91,8 +89,19 @@ apply_manifest /vagrant/confs/app2.yaml
 apply_manifest /vagrant/confs/app3.yaml
 apply_manifest /vagrant/confs/ingress.yaml
 
-echo "Waiting a bit for resources..."
-sleep 10
+echo "Waiting for ingress to exist..."
+kubectl -n default get ingress app-ingress >/dev/null 2>&1 || true
+
+echo "Waiting for app services endpoints..."
+for svc in app1-service app2-service app3-service; do
+  for i in $(seq 1 120); do
+    EP="$(kubectl -n default get endpoints "${svc}" -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
+    if [[ -n "${EP}" ]]; then
+      break
+    fi
+    sleep 1
+  done
+done
 
 echo "=========================================="
 echo "Setup complete!"

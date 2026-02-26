@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
+# This script lives in p2/scripts/.
+# We want paths (./Vagrantfile, ./confs, ./scripts/setup.sh) relative to p2/.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+cd "$PROJECT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,7 +17,6 @@ LOGIN="urosby"
 SERVER_NAME="${LOGIN}S"
 SERVER_IP="192.168.56.110"
 HOSTS_MARKER="IOT_P2_APPS"
-HOSTS_LINE="192.168.56.110 app1.com app2.com app3.com"
 
 TOTAL=0
 PASS=0

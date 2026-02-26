@@ -24,12 +24,12 @@ help:
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 	@printf "\n"
 
-setup: 
+setup:  ## Install dependencies and setup the host
 	@printf "$(GREEN)[+] Installing dependencies...$(NC)\n"
 	@chmod +x setup-host.sh
 	@./setup-host.sh
 
-acl: 
+acl:  ## Grant ACL permissions for 9p shared folders
 	@set -e; \
 	printf "$(GREEN)[+] Using qemu user: $(QEMU_USER)$(NC)\n"; \
 	printf "$(GREEN)[+] Granting ACLs for 9p share path: $(PROJECT_DIR)$(NC)\n"; \
@@ -58,88 +58,88 @@ acl:
 	\
 	printf "$(GREEN)[+] ACLs applied. Now run: make clean && make up$(NC)\n"
 
-fix-permissions: acl 
+fix-permissions: acl  ## Alias for acl target
 
-use-rsync: 
+use-rsync:  ## Switch to rsync synced folder
 	@printf "$(GREEN)[+] Switching to rsync synced folder...$(NC)\n"
 	@cp Vagrantfile Vagrantfile.backup 2>/dev/null || true
 	@cp Vagrantfile-rsync Vagrantfile
 	@printf "$(GREEN)[+] Done! Now run 'make clean && make up'$(NC)\n"
 
-use-nfs: 
+use-nfs:  ## Switch to NFS synced folder
 	@printf "$(GREEN)[+] Switching to NFS synced folder...$(NC)\n"
 	@sudo apt-get install -y nfs-kernel-server
 	@cp Vagrantfile Vagrantfile.backup 2>/dev/null || true
 	@cp Vagrantfile-nfs Vagrantfile
 	@printf "$(GREEN)[+] Done! Now run 'make clean && make up'$(NC)\n"
 
-up: 
+up:  ## Start both VMs
 	@printf "$(GREEN)[+] Starting both VMs...$(NC)\n"
 	@vagrant up $(SERVER_NAME)
 	@vagrant up $(WORKER_NAME)
 	@printf "$(GREEN)[+] Both VMs are up!$(NC)\n"
 
-start: up 
+start: up  ## Alias for up target
 
-server: 
+server:  ## Start only the server VM
 	@printf "$(GREEN)[+] Starting server VM...$(NC)\n"
 	@vagrant up $(SERVER_NAME)
 
-worker: 
+worker:  ## Start only the worker VM
 	@printf "$(GREEN)[+] Starting worker VM...$(NC)\n"
 	@vagrant up $(WORKER_NAME)
 
-ssh-server: 
+ssh-server:  ## SSH into the server VM
 	@vagrant ssh $(SERVER_NAME)
 
-ssh-worker: 
+ssh-worker:  ## SSH into the worker VM
 	@vagrant ssh $(WORKER_NAME)
 
-status: 
+status:  ## Show VM status
 	@printf "$(GREEN)[+] VM Status:$(NC)\n"
 	@vagrant status
 
-check:
+check:  ## Check cluster status
 	@printf "$(GREEN)[+] Checking cluster status...$(NC)\n\n"
 	@printf "$(YELLOW)Server VM:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "hostname && ip a show eth1 | grep 'inet ' && kubectl get nodes -o wide" || true
 	@printf "\n$(YELLOW)Worker VM:$(NC)\n"
 	@vagrant ssh $(WORKER_NAME) -c "hostname && ip a show eth1 | grep 'inet '" || true
 
-test:
+test:  ## Run tests
 	@printf "[+] Running Part 1 Tests \n\n"
 	@chmod +x ./TESTING.sh
 	@./TESTING.sh
 
-destroy:
+destroy:  ## Destroy all VMs
 	@printf "$(YELLOW)[!] Destroying all VMs...$(NC)\n"
 	@vagrant destroy -f
 	@printf "$(GREEN)[+] All VMs destroyed$(NC)\n"
 
-clean: destroy 
+clean: destroy  ## Clean up all VM artifacts and files
 	@printf "$(YELLOW)[!] Cleaning up...$(NC)\n"
 	@rm -rf .vagrant
 	@rm -f confs/node-token confs/k3s.yaml
 	@printf "$(GREEN)[+] Cleanup complete$(NC)\n"
 
-re: clean up 
+re: clean up  ## Rebuild everything from scratch
 
-reload: 
+reload:  ## Reload VMs
 	@printf "$(GREEN)[+] Reloading VMs...$(NC)\n"
 	@vagrant reload
 
-provision:
+provision:  ## Re-provision VMs
 	@printf "$(GREEN)[+] Re-provisioning VMs...$(NC)\n"
 	@vagrant provision
 
-halt:
+halt:  ## Stop all VMs
 	@printf "$(YELLOW)[!] Stopping all VMs...$(NC)\n"
 	@vagrant halt
 
-logs-server:
+logs-server:  ## Show server VM logs
 	@vagrant ssh $(SERVER_NAME) -c "sudo journalctl -u k3s -n 50"
 
-logs-worker:
+logs-worker:  ## Show worker VM logs
 	@vagrant ssh $(WORKER_NAME) -c "sudo journalctl -u k3s-agent -n 50"
 
 .DEFAULT_GOAL := help

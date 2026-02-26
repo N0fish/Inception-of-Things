@@ -20,11 +20,11 @@ help:
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-18s$(NC) %s\n", $$1, $$2}'
 	@printf "\n"
 
-preflight: 
+preflight:  ## Prepare the environment and run ACL setup
 	@mkdir -p "$(PROJECT_DIR)/confs" "$(PROJECT_DIR)/scripts"
 	@$(MAKE) acl
 
-acl: 
+acl:  ## Grant ACL permissions for 9p shared folders
 	@set -euo pipefail; \
 	PROJ="$(PROJECT_DIR)"; \
 	QEMU_USER="$$( \
@@ -47,7 +47,7 @@ acl:
 	sudo setfacl -R -d -m "u:$$QEMU_USER:rwx" "$$PROJ/confs" "$$PROJ/scripts"; \
 	printf "$(GREEN)[acl] Done$(NC)\n"
 
-update-hosts: 
+update-hosts:  ## Update /etc/hosts with app domains
 	@echo "[hosts] Updating /etc/hosts..."
 	@sudo sh -c 'tmp="$$(mktemp)"; \
 	  grep -vE "[[:space:]]# $(HOSTS_MARKER)$$" /etc/hosts > "$$tmp"; \
@@ -56,18 +56,18 @@ update-hosts:
 	  rm -f "$$tmp"'
 	@echo "[hosts] Done"
 
-up: preflight update-hosts 
+up: preflight update-hosts  ## Start the VM
 	@printf "$(GREEN)[up] Starting VM...$(NC)\n"
 	@vagrant up
 	@printf "$(GREEN)[up] Done$(NC)\n"
 
-status: 
+status:  ## Show VM status
 	@vagrant status
 
-ssh: 
+ssh:  ## SSH into the VM
 	@vagrant ssh
 
-check:
+check:  ## Check cluster status (nodes, pods, ingress, services)
 	@printf "$(GREEN)[+] Nodes:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "kubectl get nodes -o wide" 2>/dev/null || true
 	@echo ""
@@ -80,28 +80,28 @@ check:
 	@printf "$(GREEN)[+] Services:$(NC)\n"
 	@vagrant ssh $(SERVER_NAME) -c "kubectl get svc" 2>/dev/null || true
 
-test: 
+test:  ## Run tests
 	@printf "$(GREEN)[+] Running Part 2 tests...$(NC)\n"
-	@chmod +x ./test.sh
-	@./test.sh
+	@chmod +x ./scripts/test.sh
+	@./scripts/test.sh
 
-halt: 
+halt:  ## Stop the VM
 	@printf "$(YELLOW)[!] Stopping VM...$(NC)\n"
 	@vagrant halt
 
-logs: 
+logs:  ## Show VM logs
 	@vagrant ssh $(SERVER_NAME) -c "sudo journalctl -u k3s -n 50"
 
-destroy: 
+destroy:  ## Destroy the VM
 	@printf "$(YELLOW)[!] Destroying VM...$(NC)\n"
 	@vagrant destroy -f
 	@printf "$(GREEN)[+] VM destroyed$(NC)\n"
 
-clean: destroy 
+clean: destroy  ## Clean up all VM artifacts and files
 	@printf "$(YELLOW)[!] Cleaning up...$(NC)\n"
 	@rm -rf .vagrant
 	@printf "$(GREEN)[+] Cleanup complete$(NC)\n"
 
-re: clean up 
+re: clean up  ## Rebuild everything from scratch
 
 .DEFAULT_GOAL := help

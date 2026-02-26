@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
+# This script lives in p1/scripts/.
+# We want paths (./Vagrantfile, ./confs/...) relative to p1/.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+cd "$PROJECT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,7 +73,7 @@ print_test "Check if Vagrantfile exists in p1 folder"
 if [ -f "./Vagrantfile" ]; then
     print_pass "Vagrantfile exists"
 else
-    print_fail "Vagrantfile not found in ${SCRIPT_DIR}"
+    print_fail "Vagrantfile not found in ${PROJECT_DIR}"
     exit 1
 fi
 
@@ -116,18 +118,17 @@ else
     print_fail "IP addresses not found/mismatched in confs/config.yaml"
 fi
 
-
 print_header "3. SERVER VM (${SERVER_NAME}) TESTS"
 
 print_test "SSH connection to server"
-if vagrant ssh ${SERVER_NAME} -c "exit" > /dev/null 2>&1; then
+if vagrant ssh "${SERVER_NAME}" -c "exit" > /dev/null 2>&1; then
     print_pass "SSH connection successful"
 else
     print_fail "Cannot SSH to server"
 fi
 
 print_test "Server hostname"
-HOSTNAME=$(vagrant ssh ${SERVER_NAME} -c "hostname" 2>/dev/null | tr -d '\r')
+HOSTNAME=$(vagrant ssh "${SERVER_NAME}" -c "hostname" 2>/dev/null | tr -d '\r')
 if [ "$HOSTNAME" = "${SERVER_NAME}" ]; then
     print_pass "Hostname is correct: $HOSTNAME"
 else
@@ -135,7 +136,7 @@ else
 fi
 
 print_test "Server IP address on eth1"
-SERVER_IP_ACTUAL=$(vagrant ssh ${SERVER_NAME} -c "ip a show eth1 2>/dev/null | grep 'inet ' | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null | tr -d '\r')
+SERVER_IP_ACTUAL=$(vagrant ssh "${SERVER_NAME}" -c "ip a show eth1 2>/dev/null | grep 'inet ' | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null | tr -d '\r')
 if [ "$SERVER_IP_ACTUAL" = "$SERVER_IP" ]; then
     print_pass "Server IP is correct: $SERVER_IP_ACTUAL"
 else
@@ -143,21 +144,21 @@ else
 fi
 
 print_test "K3s is installed on server"
-if vagrant ssh ${SERVER_NAME} -c "which k3s" > /dev/null 2>&1; then
+if vagrant ssh "${SERVER_NAME}" -c "which k3s" > /dev/null 2>&1; then
     print_pass "K3s is installed"
 else
     print_fail "K3s is not installed"
 fi
 
 print_test "kubectl is available on server"
-if vagrant ssh ${SERVER_NAME} -c "which kubectl" > /dev/null 2>&1; then
+if vagrant ssh "${SERVER_NAME}" -c "which kubectl" > /dev/null 2>&1; then
     print_pass "kubectl is available"
 else
     print_fail "kubectl is not available"
 fi
 
 print_test "K3s server is running"
-if vagrant ssh ${SERVER_NAME} -c "sudo systemctl is-active k3s" > /dev/null 2>&1; then
+if vagrant ssh "${SERVER_NAME}" -c "sudo systemctl is-active k3s" > /dev/null 2>&1; then
     print_pass "K3s server is running"
 else
     print_fail "K3s server is not running"
@@ -166,14 +167,14 @@ fi
 print_header "4. WORKER VM (${WORKER_NAME}) TESTS"
 
 print_test "SSH connection to worker"
-if vagrant ssh ${WORKER_NAME} -c "exit" > /dev/null 2>&1; then
+if vagrant ssh "${WORKER_NAME}" -c "exit" > /dev/null 2>&1; then
     print_pass "SSH connection successful"
 else
     print_fail "Cannot SSH to worker"
 fi
 
 print_test "Worker hostname"
-HOSTNAME=$(vagrant ssh ${WORKER_NAME} -c "hostname" 2>/dev/null | tr -d '\r')
+HOSTNAME=$(vagrant ssh "${WORKER_NAME}" -c "hostname" 2>/dev/null | tr -d '\r')
 if [ "$HOSTNAME" = "${WORKER_NAME}" ]; then
     print_pass "Hostname is correct: $HOSTNAME"
 else
@@ -181,7 +182,7 @@ else
 fi
 
 print_test "Worker IP address on eth1"
-WORKER_IP_ACTUAL=$(vagrant ssh ${WORKER_NAME} -c "ip a show eth1 2>/dev/null | grep 'inet ' | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null | tr -d '\r')
+WORKER_IP_ACTUAL=$(vagrant ssh "${WORKER_NAME}" -c "ip a show eth1 2>/dev/null | grep 'inet ' | awk '{print \$2}' | cut -d'/' -f1" 2>/dev/null | tr -d '\r')
 if [ "$WORKER_IP_ACTUAL" = "$WORKER_IP" ]; then
     print_pass "Worker IP is correct: $WORKER_IP_ACTUAL"
 else
@@ -189,14 +190,14 @@ else
 fi
 
 print_test "K3s agent is installed on worker"
-if vagrant ssh ${WORKER_NAME} -c "which k3s" > /dev/null 2>&1; then
+if vagrant ssh "${WORKER_NAME}" -c "which k3s" > /dev/null 2>&1; then
     print_pass "K3s is installed"
 else
     print_fail "K3s is not installed"
 fi
 
 print_test "K3s agent is running"
-if vagrant ssh ${WORKER_NAME} -c "sudo systemctl is-active k3s-agent" > /dev/null 2>&1; then
+if vagrant ssh "${WORKER_NAME}" -c "sudo systemctl is-active k3s-agent" > /dev/null 2>&1; then
     print_pass "K3s agent is running"
 else
     print_fail "K3s agent is not running"
@@ -208,7 +209,7 @@ print_info "Getting cluster nodes..."
 echo ""
 
 print_test "Both nodes are in the cluster"
-NODE_COUNT=$(vagrant ssh ${SERVER_NAME} -c "kubectl get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r')
+NODE_COUNT=$(vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r')
 if [ "$NODE_COUNT" = "2" ]; then
     print_pass "Both nodes are present in the cluster (count: $NODE_COUNT)"
 else
@@ -216,14 +217,14 @@ else
 fi
 
 print_test "Server node is Ready"
-if vagrant ssh ${SERVER_NAME} -c "kubectl get nodes 2>/dev/null | grep ${SERVER_NAME} | grep -q Ready" 2>/dev/null; then
+if vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes 2>/dev/null | grep ${SERVER_NAME} | grep -q Ready" 2>/dev/null; then
     print_pass "Server node is Ready"
 else
     print_fail "Server node is not Ready"
 fi
 
 print_test "Worker node is Ready"
-if vagrant ssh ${SERVER_NAME} -c "kubectl get nodes 2>/dev/null | grep ${WORKER_NAME} | grep -q Ready" 2>/dev/null; then
+if vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes 2>/dev/null | grep ${WORKER_NAME} | grep -q Ready" 2>/dev/null; then
     print_pass "Worker node is Ready"
 else
     print_fail "Worker node is not Ready"
@@ -233,12 +234,12 @@ print_header "6. CLUSTER INFORMATION (for evaluation)"
 
 print_info "Running: kubectl get nodes -o wide"
 echo ""
-vagrant ssh ${SERVER_NAME} -c "kubectl get nodes -o wide" 2>/dev/null || true
+vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes -o wide" 2>/dev/null || true
 
 echo ""
 print_info "Running: kubectl get pods -A"
 echo ""
-vagrant ssh ${SERVER_NAME} -c "kubectl get pods -A" 2>/dev/null || true
+vagrant ssh "${SERVER_NAME}" -c "kubectl get pods -A" 2>/dev/null || true
 
 print_header "TEST RESULTS SUMMARY"
 
