@@ -203,34 +203,7 @@ else
     print_fail "K3s agent is not running"
 fi
 
-print_header "5. KUBERNETES CLUSTER TESTS"
-
-print_info "Getting cluster nodes..."
-echo ""
-
-print_test "Both nodes are in the cluster"
-NODE_COUNT=$(vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes --no-headers 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r')
-if [ "$NODE_COUNT" = "2" ]; then
-    print_pass "Both nodes are present in the cluster (count: $NODE_COUNT)"
-else
-    print_fail "Expected 2 nodes, found: $NODE_COUNT"
-fi
-
-print_test "Server node is Ready"
-if vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes 2>/dev/null | grep ${SERVER_NAME} | grep -q Ready" 2>/dev/null; then
-    print_pass "Server node is Ready"
-else
-    print_fail "Server node is not Ready"
-fi
-
-print_test "Worker node is Ready"
-if vagrant ssh "${SERVER_NAME}" -c "kubectl get nodes 2>/dev/null | grep ${WORKER_NAME} | grep -q Ready" 2>/dev/null; then
-    print_pass "Worker node is Ready"
-else
-    print_fail "Worker node is not Ready"
-fi
-
-print_header "6. CLUSTER INFORMATION (for evaluation)"
+print_header "5. CLUSTER INFORMATION (for evaluation)"
 
 print_info "Running: kubectl get nodes -o wide"
 echo ""

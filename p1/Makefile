@@ -108,8 +108,8 @@ check:  ## Check cluster status
 
 test:  ## Run tests
 	@printf "[+] Running Part 1 Tests \n\n"
-	@chmod +x ./TESTING.sh
-	@./TESTING.sh
+	@chmod +x ./scripts/test.sh
+	@./scripts/test.sh
 
 destroy:  ## Destroy all VMs
 	@printf "$(YELLOW)[!] Destroying all VMs...$(NC)\n"
