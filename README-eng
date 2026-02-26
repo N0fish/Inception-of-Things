@@ -1,0 +1,579 @@
+# Inception-of-Things — Detailed Project Guide
+
+
+## Why this project?
+
+The project is a hands-on introduction to **Kubernetes** — a system for running and managing containerised applications. When you have many applications that need to scale, update without downtime, and restart on failure, Kubernetes handles all of that.
+
+But Kubernetes is complex. That's why the project is built **incrementally**: each part adds one new concept and one new tool.
+
+```
+Part 1: Virtual machines → two-node cluster (basic setup)
+   ↓
+Part 2: One VM → three apps → hostname-based routing
+   ↓
+Part 3: Containers instead of VMs → automatic updates from GitHub
+   ↓
+Bonus:  Same thing, but the Git server also lives inside the cluster (full autonomy)
+```
+
+The parts are **independent** — you can run any one of them without the others.
+
+---
+
+## Host preparation
+
+Before running anything, you need to install the required tools.
+
+**Universal script:** [setup_host.sh](setup_host.sh) — installs everything needed for all parts at once:
+- `libvirt` + `QEMU/KVM` — virtualisation engine (for Parts 1 and 2)
+- `Vagrant` + `vagrant-libvirt` plugin — VM management (for Parts 1 and 2)
+- `Docker` — container engine (for Parts 3 and Bonus)
+- `K3d` — Kubernetes cluster inside Docker (for Parts 3 and Bonus)
+- `kubectl` — Kubernetes CLI (everywhere)
+- `Helm` — Kubernetes package manager (for the Bonus)
+
+```bash
+bash setup_host.sh
+# After it finishes: log out and back in (to apply Docker/libvirt group membership)
+```
+
+Each part also has its own setup script if you only need that part:
+[p1/setup-host.sh](p1/setup-host.sh) · [p3/setup_host.sh](p3/setup_host.sh) · [bonus/setup_host.sh](bonus/setup_host.sh)
+
+---
+
+## Part 1 — Two servers, one cluster
+
+**Directory:** [p1/](p1/) · **Detailed README:** [p1/README.md](p1/README.md)
+
+### The idea
+
+Here we create a real Kubernetes cluster from two virtual machines. One machine is the **control plane** (the brain of the cluster), the other is the **worker** (the executor). They communicate over an internal network.
+
+
+### Components and files
+
+#### Vagrant — automatic VM creation
+
+Vagrant is a tool that reads a description of virtual machines from a file and creates them. It doesn't run VMs itself — it delegates commands to **libvirt**, which uses **QEMU/KVM** for real hardware virtualisation.
+
+- **[p1/Vagrantfile](p1/Vagrantfile)** — the main Vagrant file. Describes which machines to create: OS image, resource allocation, IP address, and which provisioning script to run. The Vagrantfile **does not hardcode** values — it reads them from a config file.
+- **[p1/confs/config.yaml](p1/confs/config.yaml)** — configuration with data for both VMs: names, IP addresses, script paths. This is the only place you change parameters.
+
+#### First VM — K3s server (control plane)
+
+| Parameter | Value |
+|-----------|-------|
+| Name | `urosbyS` |
+| IP  | `192.168.56.110` |
+| Role | K3s server (cluster management) |
+| Script | [p1/scripts/server.sh](p1/scripts/server.sh) |
+
+**K3s** is a lightweight Kubernetes distribution. Instead of dozens of components, everything is packed into a single binary. The "server" in K3s terminology is the control plane node: it accepts `kubectl` commands, decides where to run containers, and assigns tasks to worker nodes.
+
+What [p1/scripts/server.sh](p1/scripts/server.sh) does:
+1. Installs K3s in server mode bound to IP `192.168.56.110`
+2. Waits for K3s to fully start
+3. Copies two files into the shared folder `/vagrant/confs/`:
+   - **`node-token`** — the secret token without which a worker node cannot join
+   - **`k3s.yaml`** — the kubeconfig (connection settings for `kubectl`)
+
+#### Second VM — K3s agent (worker node)
+
+| Parameter | Value |
+|-----------|-------|
+| Name | `urosbySW` |
+| IP  | `192.168.56.111` |
+| Role | K3s agent (task execution) |
+| Script | [p1/scripts/worker.sh](p1/scripts/worker.sh) |
+
+What [p1/scripts/worker.sh](p1/scripts/worker.sh) does:
+1. Waits for the `node-token` file to appear in the shared folder (up to 10 minutes) — the server may not finish starting first
+2. Waits for the server's port `6443` (`192.168.56.110:6443`) to become reachable
+3. Installs K3s in agent mode — connects to the server using the IP and token
+4. The worker node is now registered in the cluster
+
+#### Shared folder
+
+Vagrant creates a shared folder between the host and both VMs via the `9p` protocol:
+- On the host: the `p1/` directory
+- Inside VMs: `/vagrant/`
+
+This is how the server "drops" the token and kubeconfig, and the worker "picks them up". No SSH between VMs — just a shared disk.
+
+### How the components interact
+
+```
+   HOST machine (Ubuntu)
+   ┌─────────────────────────────────────────────────────┐
+   │  Vagrant (reads Vagrantfile + config.yaml)          │
+   │       │                                             │
+   │       │ creates via libvirt/QEMU                    │
+   │       ▼                                             │
+   │  ┌──────────────┐     ┌──────────────────────────┐  │
+   │  │  VM: urosbyS │     │  VM: urosbySW            │  │
+   │  │  192.168.56  │     │  192.168.56.111           │  │
+   │  │  .110        │     │                          │  │
+   │  │  K3s server  │◄────│  K3s agent               │  │
+   │  │  (control    │     │  (joins with token)      │  │
+   │  │   plane)     │     │                          │  │
+   │  └──────┬───────┘     └──────────────────────────┘  │
+   │         │                                           │
+   │  /vagrant/confs/ (9p shared folder)                 │
+   │  ├── node-token   ←── written by server             │
+   │  └── k3s.yaml     ←── written by server             │
+   └─────────────────────────────────────────────────────┘
+```
+
+### Running
+
+```bash
+cd p1
+make up          # create both VMs and start the cluster
+make check       # view cluster state (nodes, pods)
+make test        # run tests (TESTING.sh)
+make ssh-server  # SSH into the server
+make destroy     # tear everything down
+```
+
+Tests are in [p1/TESTING.sh](p1/TESTING.sh) — they verify SSH access, IP addresses, node status, and cluster health.
+
+---
+
+## Part 2 — One VM, three apps, smart routing
+
+**Directory:** [p2/](p2/) · **Detailed README:** [p2/README.md](p2/README.md)
+
+### The idea
+
+We take one VM running Kubernetes and deploy **three different web applications** on it. All three run on the same IP and the same port 80 — but Kubernetes knows which one to send a request to by looking at the `Host` header (the site name in the browser).
+
+The new tool here is **Ingress** and **Traefik** — a smart reverse proxy inside the cluster.
+
+```
+Request for app1.com → App 1
+Request for app2.com → App 2
+Request for anything else → App 3
+```
+
+### Components and files
+
+#### VM and K3s
+
+One virtual machine `urosbyS` (`192.168.56.110`), defined in [p2/Vagrantfile](p2/Vagrantfile). Created via Vagrant + libvirt, same as Part 1.
+
+Provisioning script [p2/scripts/setup.sh](p2/scripts/setup.sh):
+1. Installs K3s
+2. Waits for K3s and Traefik to be fully ready
+3. Applies all Kubernetes manifests from the `confs/` directory
+
+#### Three applications
+
+Each application is a set of three Kubernetes objects in a single file:
+
+**Application 1** → [p2/confs/app1.yaml](p2/confs/app1.yaml)
+**Application 2** → [p2/confs/app2.yaml](p2/confs/app2.yaml)
+**Application 3** → [p2/confs/app3.yaml](p2/confs/app3.yaml)
+
+Each file contains:
+
+| Object | What it is | Why it's needed |
+|--------|-----------|-----------------|
+| **Deployment** | Specification: which container to run, how many replicas | Kubernetes knows what to keep alive and how many |
+| **Service** | A stable "address" inside the cluster | Allows reaching the app by name rather than pod IP |
+| **ConfigMap** | Stores the HTML page served by nginx | A way to pass config/content to the container without rebuilding the image |
+
+All three apps use the `nginx:alpine` image — a lightweight web server. They differ only in HTML content (from the ConfigMap) and replica count:
+- App 1: 1 replica
+- App 2: **3 replicas** (demonstrating scaling)
+- App 3: 1 replica (the default catch-all)
+
+#### Traefik Ingress — smart router
+
+**Traefik** is the Ingress Controller built into K3s. It listens on external port 80 and, when it receives an HTTP request, inspects the `Host` header to determine where to forward it.
+
+Routing rules are defined in [p2/confs/ingress.yaml](p2/confs/ingress.yaml):
+
+```
+Host: app1.com  →  Service: app1-service (→ App 1 pods)
+Host: app2.com  →  Service: app2-service (→ App 2 pods)
+(no rule)       →  Service: app3-service (→ App 3, default backend)
+```
+
+#### /etc/hosts — local domain resolution
+
+The browser doesn't know that `app1.com` resolves to `192.168.56.110`. For this to work on the host machine, the Makefile automatically adds a line to `/etc/hosts`:
+
+```
+192.168.56.110  app1.com app2.com app3.com
+```
+
+Done via `make update-hosts` — without this, the domains won't resolve.
+
+### How the components interact
+
+```
+   Browser / curl on host
+          │
+          │ curl http://app1.com  (resolves to 192.168.56.110 via /etc/hosts)
+          ▼
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  VM: urosbyS (192.168.56.110)                                   │
+   │                                                                 │
+   │  ┌──────────────────────────────────────────────────────────┐   │
+   │  │  K3s (Kubernetes)                                        │   │
+   │  │                                                          │   │
+   │  │  [port 80]                                               │   │
+   │  │      │                                                   │   │
+   │  │      ▼                                                   │   │
+   │  │  Traefik (Ingress Controller)                            │   │
+   │  │  inspects the Host header                                │   │
+   │  │      │                                                   │   │
+   │  │   ┌──┴──────────────────────────────┐                   │   │
+   │  │   │                                 │                   │   │
+   │  │   ▼ Host=app1.com   ▼ Host=app2.com │ everything else   │   │
+   │  │  app1-service      app2-service     ▼                   │   │
+   │  │       │                 │      app3-service             │   │
+   │  │       ▼                 ▼           │                   │   │
+   │  │  [Pod: App1]   [Pod: App2 ×3]  [Pod: App3]             │   │
+   │  │  nginx:alpine   nginx:alpine    nginx:alpine            │   │
+   │  │  HTML from      HTML from       HTML from               │   │
+   │  │  ConfigMap      ConfigMap       ConfigMap               │   │
+   │  └──────────────────────────────────────────────────────────┘   │
+   └─────────────────────────────────────────────────────────────────┘
+```
+
+### Running
+
+```bash
+cd p2
+make up      # create VM, start K3s, deploy applications
+make test    # check HTTP responses from all three apps
+make check   # view Ingress, services, pod status
+make destroy # tear everything down
+```
+
+Tests in [p2/test.sh](p2/test.sh) verify: all three domains resolve, all three return HTTP 200, deployments exist, Ingress is configured.
+
+---
+
+## Part 3 — Kubernetes inside Docker + auto-updates from GitHub
+
+**Directory:** [p3/](p3/) · **Detailed README:** [p3/README.md](p3/README.md)
+
+### The idea
+
+In Parts 1 and 2, Kubernetes ran on virtual machines — heavy, slow to create. Now we switch to **K3d**: a K3s cluster where nodes are not VMs but **Docker containers** on the host.
+
+The second key tool is **ArgoCD** — a GitOps controller that watches a Git repository and automatically applies changes to the cluster. You update a file in GitHub → ArgoCD rolls out the new version of the application within minutes. No manual commands.
+
+### The GitOps concept
+
+**GitOps** is an approach where the Git repository is the **single source of truth** for what should be running in the cluster. You don't deploy manually — you describe the desired state in files, and a tool (ArgoCD) continuously ensures the cluster matches that state.
+
+```
+You change a file in GitHub
+         ↓
+ArgoCD detects the change
+         ↓
+ArgoCD applies it to the cluster
+         ↓
+The application updates itself
+```
+
+### Components and files
+
+#### K3d — Kubernetes in Docker
+
+**K3d** wraps K3s nodes in Docker containers. Instead of "spin up a VM with Linux, install K3s" — it's just a `docker run`.
+
+Script [p3/scripts/create_cluster.sh](p3/scripts/create_cluster.sh):
+1. Creates a K3d cluster named `iot-cluster`
+2. Forwards a port: `8080` on the host → port `80` inside the cluster
+3. Adds one worker node (`--agents 1`)
+4. Waits for all nodes to be ready
+
+#### ArgoCD — GitOps controller
+
+ArgoCD is an application that runs directly inside Kubernetes. It watches a Git repository and applies any changes it finds to the cluster.
+
+Script [p3/scripts/install_argocd.sh](p3/scripts/install_argocd.sh):
+1. Creates the `argocd` namespace
+2. Applies the official ArgoCD v2.9.3 installation manifest
+3. Waits for all ArgoCD pods to start
+4. Configures ArgoCD to use HTTP (not HTTPS) for simplicity
+5. Prints the login/password and UI URL (http://localhost:9090)
+
+#### ArgoCD Application — describing what to deploy and from where
+
+**Application** is a Kubernetes object (ArgoCD-specific) that describes:
+- **Where to get manifests:** the GitHub repository URL
+- **Where to deploy:** the `dev` namespace in the cluster
+- **How to sync:** automatically, on any change in the repo
+
+File [p3/confs/application.yaml](p3/confs/application.yaml) — you need to put your repository URL in it before running.
+
+```yaml
+repoURL: https://github.com/YOUR_USERNAME/YOUR_REPO.git
+targetRevision: HEAD  # track the latest commit
+path: .               # manifests are at the root of the repo
+destination:
+  namespace: dev      # deploy into the dev namespace
+syncPolicy:
+  automated:
+    prune: true       # remove resources that are no longer in Git
+    selfHeal: true    # revert manual changes made in the cluster
+```
+
+#### The application — wil-playground
+
+The manifest [p3/confs/app/deployment.yaml](p3/confs/app/deployment.yaml) contains:
+- **Namespace** `dev` — an isolated namespace for the application
+- **Deployment** `wil-playground` — runs the container `wil42/playground:v1` on port 8888
+- **Service** `wil-playground-service` — gives the pod a stable address inside the cluster
+
+This file is **what you put in your GitHub repo** for ArgoCD to pick up. When you change the version from `v1` to `v2` and commit — ArgoCD sees it and restarts the pod with the new image.
+
+Script [p3/scripts/configure_app.sh](p3/scripts/configure_app.sh) applies `application.yaml` and waits for the pods to come up.
+
+### How the components interact
+
+```
+                 GitHub
+         ┌───────────────────────┐
+         │  config repository    │
+         │  └── deployment.yaml  │
+         │       image: v1→v2   │
+         └──────────┬────────────┘
+                    │ ArgoCD polls this every ~3 min
+                    │
+   HOST machine (Ubuntu)
+   ┌─────────────────────────────────────────────────────┐
+   │                                                     │
+   │  Docker Engine                                      │
+   │  ┌──────────────────────────────────────────────┐   │
+   │  │  K3d cluster (K3s nodes in Docker containers)│   │
+   │  │                                              │   │
+   │  │  namespace: argocd                           │   │
+   │  │  ┌─────────────────────────────────────┐    │   │
+   │  │  │ ArgoCD                              │    │   │
+   │  │  │ - watches GitHub                    │    │   │
+   │  │  │ - applies changes                   │    │   │
+   │  │  └─────────────────────────────────────┘    │   │
+   │  │              │                              │   │
+   │  │              │ kubectl apply                │   │
+   │  │              ▼                              │   │
+   │  │  namespace: dev                             │   │
+   │  │  ┌─────────────────────────────────────┐   │   │
+   │  │  │ Pod: wil-playground:v1              │   │   │
+   │  │  │ port 8888                           │   │   │
+   │  │  └─────────────────────────────────────┘   │   │
+   │  └──────────────────────────────────────────────┘   │
+   │                                                     │
+   │  port 9090 → ArgoCD UI (http://localhost:9090)      │
+   │  port 9091 → application (http://localhost:9091)    │
+   └─────────────────────────────────────────────────────┘
+```
+
+### Running
+
+```bash
+cd p3
+# First: create a GitHub repository, push confs/app/deployment.yaml to it,
+# and put the URL into confs/application.yaml
+
+make all-in-one       # create cluster + install ArgoCD + deploy the app
+make status           # view overall status
+make argocd-password  # get the ArgoCD UI password
+make destroy          # delete the cluster
+```
+
+**GitOps test:** change `wil42/playground:v1` to `v2` in the file and push to GitHub → within a few minutes `curl http://localhost:9091` will show the new version.
+
+---
+
+## Bonus — Same thing, but without GitHub
+
+**Directory:** [bonus/](bonus/) · **Detailed README:** [bonus/README.md](bonus/README.md)
+
+### The idea
+
+Part 3 depended on an external GitHub. What if you need everything to work **completely locally**, without internet? In the Bonus, **GitLab** — a full Git server — is added to the same K3d cluster. Now the cluster hosts ArgoCD, GitLab, and the application itself — three independent systems in one place.
+
+### Components and files
+
+#### Everything from Part 3 +
+
+The cluster and ArgoCD are created by the same scripts:
+- [bonus/scripts/create_cluster.sh](bonus/scripts/create_cluster.sh) — creates the K3d cluster
+- [bonus/scripts/install_argocd.sh](bonus/scripts/install_argocd.sh) — installs ArgoCD
+
+#### GitLab — self-hosted Git server
+
+GitLab is a massive application (web interface + PostgreSQL database + Redis + many services). Installing it manually is impractical — **Helm** is used instead.
+
+**Helm** is the Kubernetes package manager. Like `apt install`, but for the cluster. A single chart file contains descriptions for all the dozens of GitLab objects.
+
+Script [bonus/scripts/install_gitlab.sh](bonus/scripts/install_gitlab.sh):
+1. Adds the official GitLab Helm repository
+2. Installs GitLab in the `gitlab` namespace with minimal resources
+3. Waits for the main pod to be ready (up to 1 hour — GitLab is large)
+4. Extracts the initial root password from a Kubernetes secret
+
+GitLab is accessible at `http://localhost:8181` after port-forwarding.
+
+#### configure_gitlab.sh — automated setup
+
+Script [bonus/scripts/configure_gitlab.sh](bonus/scripts/configure_gitlab.sh) does everything you'd normally do manually:
+1. Creates an access token via the GitLab Rails API (inside the pod)
+2. Starts a temporary port-forward to GitLab
+3. Creates the `iot-playground` repository via the GitLab API
+4. Uploads `deployment.yaml` to that repository
+
+#### configure_argocd.sh — connecting ArgoCD to local GitLab
+
+Script [bonus/scripts/configure_argocd.sh](bonus/scripts/configure_argocd.sh):
+1. Creates a Kubernetes secret with the GitLab access token
+2. Applies [bonus/confs/application-gitlab.yaml](bonus/confs/application-gitlab.yaml) — an Application object pointing to the **internal** GitLab address in the cluster
+
+Key point: ArgoCD reaches GitLab via the **internal cluster DNS name**, not via `localhost`:
+```
+http://gitlab-webservice-default.gitlab.svc:8181/root/iot-playground.git
+```
+This works because both ArgoCD and GitLab run inside the same cluster and can communicate directly without port-forwarding.
+
+### Namespaces
+
+In Kubernetes, a namespace is a way to isolate resources within a single cluster. The Bonus uses three namespaces:
+
+| Namespace | What lives there |
+|-----------|-----------------|
+| `gitlab`  | GitLab server (web, DB, Redis, ...) |
+| `argocd`  | ArgoCD controller |
+| `dev`     | The wil-playground application |
+
+### How the components interact
+
+```
+   HOST machine (Ubuntu)
+   ┌─────────────────────────────────────────────────────────────┐
+   │  Docker Engine                                              │
+   │  ┌────────────────────────────────────────────────────┐    │
+   │  │  K3d cluster                                       │    │
+   │  │                                                    │    │
+   │  │  namespace: gitlab                                 │    │
+   │  │  ┌──────────────────────────────────────────────┐ │    │
+   │  │  │ GitLab (installed via Helm)                  │ │    │
+   │  │  │ - webservice (web interface)                 │ │    │
+   │  │  │ - postgresql (database)                      │ │    │
+   │  │  │ - redis (cache)                              │ │    │
+   │  │  │ - repository: iot-playground                 │ │    │
+   │  │  │   └── deployment.yaml (image: v1)            │ │    │
+   │  │  └─────────────────┬────────────────────────────┘ │    │
+   │  │                    │                               │    │
+   │  │  namespace: argocd │ (internal DNS)                │    │
+   │  │  ┌─────────────────▼────────────────────────────┐ │    │
+   │  │  │ ArgoCD                                       │ │    │
+   │  │  │ - watches the repo in GitLab                 │ │    │
+   │  │  │ - on deployment.yaml change → applies it     │ │    │
+   │  │  └─────────────────┬────────────────────────────┘ │    │
+   │  │                    │                               │    │
+   │  │  namespace: dev    │ kubectl apply                 │    │
+   │  │  ┌─────────────────▼────────────────────────────┐ │    │
+   │  │  │ Pod: wil-playground                          │ │    │
+   │  │  └──────────────────────────────────────────────┘ │    │
+   │  └────────────────────────────────────────────────────┘    │
+   │                                                             │
+   │  localhost:8181 → GitLab UI                                 │
+   │  localhost:9090 → ArgoCD UI                                 │
+   │  localhost:9091 → Application                               │
+   └─────────────────────────────────────────────────────────────┘
+```
+
+### Running
+
+```bash
+cd bonus
+make all-in-one      # create cluster + ArgoCD + GitLab + configure everything
+make port-forward    # forward ports (if not started automatically)
+make gitlab-password # get the GitLab root password
+make argocd-password # get the ArgoCD admin password
+make status          # view overall status
+make destroy         # tear everything down
+```
+
+**GitOps test:** open the GitLab UI at `http://localhost:8181`, navigate to `deployment.yaml` in the `iot-playground` repository, change `v1` to `v2`, and commit — ArgoCD will automatically update the application.
+
+---
+
+## Parts comparison
+
+| | Part 1 | Part 2 | Part 3 | Bonus |
+|--|--------|--------|--------|-------|
+| **Where Kubernetes runs** | VM (QEMU/KVM) | VM (QEMU/KVM) | Docker containers | Docker containers |
+| **Number of nodes** | 2 (server + worker) | 1 | 2 (K3d) | 2 (K3d) |
+| **Key tool** | Vagrant + K3s | Traefik Ingress | ArgoCD | ArgoCD + GitLab |
+| **Where app config lives** | — | files in `confs/` | GitHub | GitLab inside the cluster |
+| **Auto-updates** | no | no | yes (from GitHub) | yes (from local GitLab) |
+| **Internet dependency** | for VM images | for VM images | for GitHub | no (after initial setup) |
+
+---
+
+## Project file structure
+
+```
+IoT_right/
+├── setup_host.sh               # Install all host dependencies
+│
+├── p1/                         # Part 1: two VMs, K3s cluster
+│   ├── Vagrantfile             # VM definition (reads config.yaml)
+│   ├── Makefile                # Convenience commands: up, ssh, check, test...
+│   ├── TESTING.sh              # Tests for evaluation
+│   ├── setup-host.sh           # Install dependencies for p1 only
+│   ├── confs/
+│   │   └── config.yaml         # VM data (names, IPs, resources)
+│   └── scripts/
+│       ├── server.sh           # Provision the server (K3s server mode)
+│       └── worker.sh           # Provision the worker (K3s agent mode)
+│
+├── p2/                         # Part 2: one VM, 3 apps
+│   ├── Vagrantfile             # VM definition
+│   ├── Makefile                # Commands + update-hosts for /etc/hosts
+│   ├── test.sh                 # Tests for evaluation
+│   ├── confs/
+│   │   ├── app1.yaml           # Deployment + Service + ConfigMap for App 1
+│   │   ├── app2.yaml           # Deployment (3 replicas) + Service + ConfigMap for App 2
+│   │   ├── app3.yaml           # Deployment + Service + ConfigMap for App 3 (default)
+│   │   └── ingress.yaml        # Traefik Ingress: hostname-based routing rules
+│   └── scripts/
+│       └── setup.sh            # Install K3s + apply manifests
+│
+├── p3/                         # Part 3: K3d + ArgoCD + GitHub
+│   ├── Makefile                # Commands: cluster, argocd, app, all-in-one...
+│   ├── setup_host.sh           # Install dependencies for p3 only
+│   ├── confs/
+│   │   ├── application.yaml    # ArgoCD Application (points to GitHub)
+│   │   └── app/
+│   │       └── deployment.yaml # What to deploy: Namespace + Deployment + Service
+│   └── scripts/
+│       ├── create_cluster.sh   # Create the K3d cluster
+│       ├── install_argocd.sh   # Install ArgoCD into the cluster
+│       └── configure_app.sh    # Apply Application, wait for pods
+│
+└── bonus/                      # Bonus: K3d + ArgoCD + local GitLab
+    ├── Makefile                # Commands + gitlab + configure-gitlab...
+    ├── setup_host.sh           # Install dependencies + Helm
+    ├── confs/
+    │   ├── application.yaml          # ArgoCD Application (GitHub placeholder)
+    │   ├── application-gitlab.yaml   # ArgoCD Application (points to local GitLab)
+    │   └── app/
+    │       └── deployment.yaml       # What to deploy (same as in p3)
+    └── scripts/
+        ├── create_cluster.sh         # Create the K3d cluster
+        ├── install_argocd.sh         # Install ArgoCD
+        ├── install_gitlab.sh         # Install GitLab via Helm
+        ├── configure_gitlab.sh       # Create repo, upload file, issue token
+        ├── configure_argocd.sh       # Connect ArgoCD to GitLab
+        └── configure_app.sh          # Apply Application, wait for pods
+```
